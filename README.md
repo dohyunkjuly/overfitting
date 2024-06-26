@@ -1,0 +1,2 @@
+# ccbt
+CryptoCurrency BackTesting library
