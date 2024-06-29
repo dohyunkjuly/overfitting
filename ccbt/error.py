@@ -7,5 +7,6 @@ class CustomError(Exception):
         msg = self.msg.format(**self.kwargs)
         return msg
 
+
 class EmptyOrderParameters(CustomError):
     pass
