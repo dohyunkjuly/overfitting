@@ -1,24 +1,13 @@
 from math import copysign
 
-
 class Position:
     # using __slots__ to save on memory usage.
-    __slots__ = [
-        "qty",
-        "price",
-        "liquid_price",
-        "symbol",
-        "maint_margin_rate",
-        "maint_amount",
-    ]
+    __slots__ = ["qty", "price", "liquid_price", "symbol", 
+                 "maint_margin_rate", "maint_amount"]
 
-    def __init__(
-        self,
-        symbol=None,
-        leverage=0,
-        maint_margin_rate=0.5,
-        maint_amount=0,
-    ):
+    def __init__(self, symbol=None, leverage=0, maint_margin_rate=0.5, 
+                 maint_amount=0):
+        
         self.qty = 0.0
         self.price = 0.0
         self.liquid_price = 0.0
@@ -71,6 +60,9 @@ class Position:
         r = {"pnl": 0}
         if self.symbol != txn.symbol:
             raise Exception("update() updating different symbol.")
+
+        if txn.qty == 0:
+            raise Exception("update() txn qty cannot be zero.")
 
         total_qty = self.qty + txn.qty
 
