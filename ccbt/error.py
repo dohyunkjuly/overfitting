@@ -10,3 +10,6 @@ class CustomError(Exception):
 
 class EmptyOrderParameters(CustomError):
     pass
+
+class InvalidOrder(CustomError):
+    pass
