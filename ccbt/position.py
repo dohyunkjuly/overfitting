@@ -2,17 +2,17 @@ from math import copysign
 
 class Position:
     # using __slots__ to save on memory usage.
-    __slots__ = ["qty", "price", "liquid_price", "symbol", 
+    __slots__ = ['symbol', "qty", "price", "liquid_price", "symbol", 
                  "maint_margin_rate", "maint_amount"]
 
     def __init__(self, symbol=None, leverage=0, maint_margin_rate=0.5, 
                  maint_amount=0):
         
+        self.symbol = symbol
         self.qty = 0.0
         self.price = 0.0
         self.liquid_price = 0.0
         self.margin = 0.0
-        self.symbol = symbol
         self.leverage = leverage
         self.maint_margin_rate = maint_margin_rate
         self.maint_amount = maint_amount
@@ -108,3 +108,16 @@ class Position:
         self.margin = 0.0
 
         return {"pnl": pnl}
+    
+    def to_dict(self):
+        """
+        Creates a hash map displaying the position state
+        """
+        return{
+            'symbol': self.symbol,
+            'qty': self.qty,
+            'price': self.price,
+            'liquid_price': self.liquid_price,
+            'margin': self.margin,
+            'leverage': self.leverage
+        }
