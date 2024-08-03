@@ -8,4 +8,4 @@ def enum(*args):
     Returns:
     Enum: An Enum class with the provided names.
     """
-    return Enum({name: name for name in args})
+    return Enum('Enum', args)
