@@ -1,8 +1,8 @@
 import math
 import uuid
 
-from ccbt.functions.type import enum
-from ccbt.error import InvalidOrder
+from overfitting.functions.type import enum
+from overfitting.error import InvalidOrder
 
 TYPE = enum('tp', 'sl', 'limit', 'market')
 DIRECTION = enum('buy', 'sell')
