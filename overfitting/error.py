@@ -8,6 +8,9 @@ class CustomError(Exception):
         return msg
 
 
+class InitializationError(CustomError):
+    pass
+
 class EmptyOrderParameters(CustomError):
     pass
 

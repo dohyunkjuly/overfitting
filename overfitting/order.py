@@ -1,6 +1,5 @@
 import math
 import uuid
-
 from overfitting.functions.type import enum
 from overfitting.error import InvalidOrder
 
@@ -90,7 +89,7 @@ class Order:
                 self.is_triggered = True
 
         return self.is_triggered
-    
+
     def _check_trigger_conditions(self):
         """
         Checks whether the order conditions (stop and limit prices) are valid.
@@ -118,3 +117,4 @@ class Order:
                     flag = 1 
         if flag == 1:
             raise InvalidOrder('Invalid Conditional Order')
+        
