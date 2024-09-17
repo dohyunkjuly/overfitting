@@ -57,6 +57,12 @@ class Broker:
         self.open_orders.append(order)
         return order
     
+    def get_position(self, symbol):
+        if symbol not in self.position:
+            self.position[symbol] = Position(symbol)
+            
+        return self.position[symbol]
+    
     def set_leverage(self, symbol, leverage):
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
@@ -74,7 +80,7 @@ class Broker:
 
     def next(self):
         data = self.data
-        open, high, low = data.Open[self._i], data.High[self._i], data.Low[self._i]
+        open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
 
         if self._i != 0:
             prev_high = data.High[self._i - 1]

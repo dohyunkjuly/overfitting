@@ -9,7 +9,7 @@ from overfitting.error import InitializationError
 
 class Strategy:
     def __init__(self, data: pd.DataFrame, *,
-                 initial_captial=1000000,
+                 initial_capital=1000000,
                  commission_rate=0.0002,
                  slippage_rate=0):
         # Handles dataframe
@@ -18,7 +18,7 @@ class Strategy:
         
         # Initialize Broker class
         self.broker = Broker(self.data, 
-                             initial_captial, 
+                             initial_capital, 
                              commission_rate, 
                              slippage_rate)
         
@@ -37,6 +37,13 @@ class Strategy:
         self.data['timestamp'] = data.index.to_numpy()
         self.data.update({col: data[col].to_numpy() for col in data.columns})
 
+    def __repr__(self):
+        return (f"Strategy("
+                f"initial_capital={self.broker.initial_captial}, "
+                f"commission_rate={self.broker.commission_rate}, "
+                f"slippage_rate={self.broker.slippage_rate}, "
+                f"balances={self.balances}, "
+                f"returns={self.returns})")
 
     @abstractmethod
     def init(self):
@@ -74,6 +81,10 @@ class Strategy:
         in the position being liquidated after changing the leverage.
         """
         self.broker.set_leverage(symbol, leverage)
+
+    def get_position(self,symbol):
+        """Fetch the current position of a specific symbol"""
+        return self.broker.get_position(symbol)
 
     def run(self):
         """
