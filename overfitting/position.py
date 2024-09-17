@@ -5,9 +5,9 @@ class Position:
     __slots__ = ['symbol', "qty", "price", "liquid_price", "symbol", 
                  "maint_margin_rate", "maint_amount"]
 
-    def __init__(self, symbol=None, leverage=0, maint_margin_rate=0.5, 
+    def __init__(self, symbol=None, leverage=1, maint_margin_rate=0.5, 
                  maint_amount=0):
-        
+
         self.symbol = symbol
         self.qty = 0.0
         self.price = 0.0
@@ -57,7 +57,7 @@ class Position:
         return price_diff * abs(txn.qty)  # PnL
 
     def update(self, txn):
-        r = {"pnl": 0}
+        pnl = 0.0
         if self.symbol != txn.symbol:
             raise Exception("update() updating different symbol.")
 
@@ -69,7 +69,7 @@ class Position:
         # Position is closed
         if total_qty == 0:
             # Settle PnL
-            r["pnl"] = self._calculate_pnl(txn)
+            pnl = self._calculate_pnl(txn)
             self.price, self.liquid_price = 0.0
         else:
             position_side = copysign(1, self.qty)
@@ -78,7 +78,7 @@ class Position:
             # Partially closing a position
             if position_side != txn_side:
                 # Settle PnL
-                r["pnl"] = self._calculate_pnl(txn)
+                pnl = self._calculate_pnl(txn)
                 # Closing short and opening a long or
                 # closing long and opening a short position
                 if abs(txn.qty) > abs(self.qty):
@@ -94,25 +94,26 @@ class Position:
         self._update_liquid_price()
         self.qty = total_qty
         
-        return r
+        return pnl
 
     def liquidate(self):
         """
         Liquidates position by resetting quantity, price, 
-        liquidation price, and margin. Returns PnL
+        liquidation price, and margin. Returns the loss
         """
-        pnl = -self.margin
+        l = -self.margin
         self.qty = 0.0
         self.price = 0.0
         self.liquid_price = 0.0
         self.margin = 0.0
 
-        return {"pnl": pnl}
+        return l
     
+    def set_leverage(self, leverage):
+        self.leverage = leverage
+        self._update_liquid_price()
+        
     def to_dict(self):
-        """
-        Creates a hash map displaying the position state
-        """
         return{
             'symbol': self.symbol,
             'qty': self.qty,

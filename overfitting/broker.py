@@ -15,10 +15,10 @@ class Broker:
         self.open_orders: List[Order] = []
         self.position: Dict[Position] = {}
         
-        # Log for the trades
-        self.trades= []
+        self.trades = []
         self.trade_number = 0
-    
+        self._i = 0
+
     def __repr__(self):
         return """
 {class_name}(
@@ -39,11 +39,9 @@ class Broker:
                    position=self.position)
     
     def order(self, 
-              timestamp: pd.Timestamp, 
               symbol: str, 
               qty: float, 
               price: float, 
-              direction: str, 
               *, 
               type: Optional[str], 
               stop: Optional[float], 
@@ -53,14 +51,72 @@ class Broker:
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
 
-        order = Order(timestamp, symbol, qty, price, direction, type=type)
+        timestamp = pd.to_datetime(self.data['timestamp'][self._i])
+        order = Order(timestamp, symbol, qty, price, type=type)
         # Put new order in the open_orders List
         self.open_orders.append(order)
         return order
     
+    def set_leverage(self, symbol, leverage):
+        if symbol not in self.position:
+            self.position[symbol] = Position(symbol)
+        
+        position = self.position[symbol]
+        position.set_leverage(leverage)
+        # Check if the position would be liquidated with the new leverage
+        lp = position.liquid_price
+        p = self.data.Open[self._i]
+
+        if (position.qty > 0 and p <= lp) or \
+           (position.qty < 0 and p >= lp):
+            raise Exception(f"Cannot change leverage for {symbol}. 
+                            Position would be liquidated at price {lp}.")
+
     def next(self):
-        
-        
+        data = self.data
+        open, high, low = data.Open[self._i], data.High[self._i], data.Low[self._i]
+
+        if self._i != 0:
+            prev_high = data.High[self._i - 1]
+            prev_low  = data.Low[self._i - 1]
+
+            #Check for the liquidation price
+            for _, s in enumerate(self.position):
+                p = self.position[s]
+                lp = p.liquid_price
+                # Check conditions for liquidation
+                if ((p.qty > 0 and prev_low <= lp) or 
+                    (p.qty < 0 and prev_high >= lp)):
+
+                    self.cash += p.liquidate()
+                    
+        # Check for orders 
+        for order in self.open_orders:
+            symbol = order.symbol
+            price = order.price
+            # Check for market order
+            if order.type == 'market':
+                # Determin the Entry Price
+                self.position[symbol].price = open
+                pnl = self.position[symbol].update(order)
+                order.fill()
+            else:
+                # Check for the condition
+                if order.qty > 0 and high > price:
+                    pnl = self.position[symbol].update(order)
+                    order.fill()
+                elif order.qty < 0 and low < price:
+                    pnl = self.position[symbol].update(order)
+                    order.fill()
+
+            if pnl:
+                commission = self.commission_rate * 2 * order.qty
+                self.cash += pnl - commission
+                
+        # Lastly update index
+        self._i += 1
+                
+    
         
     
 

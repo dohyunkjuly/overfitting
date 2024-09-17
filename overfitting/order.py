@@ -33,7 +33,7 @@ class Order:
         self.trailing_delta = trailing_delta
         self.is_triggered = False
         self.reason = None
-
+    
         # Check Conditions
         self._check_trigger_conditions()
 

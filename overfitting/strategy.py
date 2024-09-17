@@ -24,8 +24,6 @@ class Strategy:
         
         self.balances = []
         self.returns = []
-        # Initialize iterator
-        self._i = 0
         self.init()
 
     def _conviert_into_numpy(self, data):
@@ -60,16 +58,22 @@ class Strategy:
         within the `run` method.
         """
 
-    def limit_order(self, symbol, qty, price, direction):
+    def limit_order(self, symbol: str, qty: float, price: float):
         # Place a new limit order using the broker class.
-        t = self.data['timestamp'][self._i]
-        return self.broker.order(t, symbol, qty, price, direction, type='limit')
+        return self.broker.order(symbol, qty, price, type='limit')
 
-    def market_order(self,symbol, qty, direction):
+    def market_order(self,symbol: str, qty: float):
         # Place a market order using the broker class.
-        t = self.data['timestamp'][self._i]
-        return self.broker.order(t, symbol, qty, None, direction, type='market')
+        return self.broker.order(symbol, qty, None, type='market')
     
+    def set_leverage(self, symbol, leverage):
+        """
+        Sets the leverage for a specific symbol.
+
+        Raises an exception if the updated liquidation price would result 
+        in the position being liquidated after changing the leverage.
+        """
+        self.broker.set_leverage(symbol, leverage)
 
     def run(self):
         """
@@ -89,4 +93,18 @@ class Strategy:
         r = np.zeros(len(t))
 
         for i in range(len(t)):
-            pass
+            self.next(i)
+            self.broker.next()
+
+            # Update Balance
+            b[i] = self.broker.cash
+
+            if i > 0:
+                # Updates the Returns
+                pb = b[i-1]
+                r[i] = (b - pb) / pb
+
+        self.balances = b.tolist()
+        self.returns = r.tolist()
+
+        return pd.Series(self.returns, index=t.tolist())
