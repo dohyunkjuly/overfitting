@@ -113,7 +113,7 @@ class Strategy:
             if i > 0:
                 # Updates the Returns
                 pb = b[i-1]
-                r[i] = (b - pb) / pb
+                r[i] = (b[i] - pb) / pb
 
         self.balances = b.tolist()
         self.returns = r.tolist()

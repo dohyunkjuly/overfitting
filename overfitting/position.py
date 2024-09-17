@@ -3,7 +3,7 @@ from math import copysign
 class Position:
     # using __slots__ to save on memory usage.
     __slots__ = ['symbol', "qty", "price", "liquid_price", "symbol", 
-                 "maint_margin_rate", "maint_amount"]
+                 "leverage", "margin", "maint_margin_rate", "maint_amount"]
 
     def __init__(self, symbol=None, leverage=1, maint_margin_rate=0.5, 
                  maint_amount=0):

@@ -12,7 +12,7 @@ STATUS = enum(
 )
 
 class Order:
-    __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', 'status', 
+    __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', '_status', 
                  'stop_price', 'trailing_delta', 'is_triggered','reason']
 
     def __init__(self, time, symbol, qty, price, type,
@@ -35,7 +35,8 @@ class Order:
         self.reason = None
     
         # Check Conditions
-        self._check_trigger_conditions()
+        # TO do List
+        # 1. Debug _check_trigger_conditions()
 
     def to_dict(self):
         return {slot: getattr(self, slot) for slot in self.__slots__}

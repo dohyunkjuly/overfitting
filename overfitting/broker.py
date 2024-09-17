@@ -43,16 +43,15 @@ class Broker:
               qty: float, 
               price: float, 
               *, 
-              type: Optional[str], 
-              stop: Optional[float], 
-              trailing: Optional[float]):             
+              type: Optional[str]):             
         
         # Initialize Position Dict
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
 
         timestamp = pd.to_datetime(self.data['timestamp'][self._i])
-        order = Order(timestamp, symbol, qty, price, type=type)
+        order = Order(timestamp, symbol, qty, price, type)
+
         # Put new order in the open_orders List
         self.open_orders.append(order)
         return order
@@ -75,16 +74,16 @@ class Broker:
 
         if (position.qty > 0 and p <= lp) or \
            (position.qty < 0 and p >= lp):
-            raise Exception(f"Cannot change leverage for {symbol}. 
-                            Position would be liquidated at price {lp}.")
+            raise Exception(f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
+
 
     def next(self):
         data = self.data
         open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
 
         if self._i != 0:
-            prev_high = data.High[self._i - 1]
-            prev_low  = data.Low[self._i - 1]
+            prev_high = data.high[self._i - 1]
+            prev_low  = data.low[self._i - 1]
 
             #Check for the liquidation price
             for _, s in enumerate(self.position):
@@ -99,7 +98,6 @@ class Broker:
         # Check for orders 
         for order in self.open_orders:
             symbol = order.symbol
-            price = order.price
             # Check for market order
             if order.type == 'market':
                 # Determin the Entry Price
