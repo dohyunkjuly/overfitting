@@ -4,7 +4,6 @@ from overfitting.functions.type import enum
 from overfitting.error import InvalidOrder
 
 TYPE = enum('tp', 'sl', 'limit', 'market')
-DIRECTION = enum('buy', 'sell')
 STATUS = enum(
     'OPEN', 
     'CANCELLED', 
@@ -13,23 +12,17 @@ STATUS = enum(
 )
 
 class Order:
-    __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', 'direction'
-                 'status', 'stop_price', 'trailing_delta', 'is_triggered',
-                 'reason']
+    __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', 'status', 
+                 'stop_price', 'trailing_delta', 'is_triggered','reason']
 
-    def __init__(self, time, symbol, qty, price, type, direction, 
+    def __init__(self, time, symbol, qty, price, type,
                  stop_price=None, trailing_delta=None):
-
-        """
-        @time: epoch time
-        """
-        # Convert to lowercase to ensure case-insensitivity
+        
+        """@time: Pandas Date Time"""
         type = type.lower()
-        direction = direction.lower()
 
         self.created_at = time
         self.type = self._get_enum_value(TYPE, type, 'type')
-        self.direction = self._get_enum_value(DIRECTION, direction, 'direction')    
 
         self.id = self.make_id()
         self.symbol = symbol
@@ -77,7 +70,7 @@ class Order:
         self.reason = reason
 
     def check_trigger_status(self, updated_price):
-        if self.direction == 'buy':
+        if self.qty > 0: # qty > 0 == Long
             if self.type == 'tp' and updated_price > self.price:
                 self.is_triggered = True
             elif self.type =='sl' and updated_price < self.price:
@@ -99,7 +92,7 @@ class Order:
             return
         
         flag = 0
-        if self.direction == 'buy':
+        if self.qty > 0:
             if self.type == 'tp':
                 if self.stop_price < self.price:
                     flag = 1
