@@ -99,7 +99,7 @@ class Broker:
         for order in self.open_orders:
             symbol = order.symbol
             # Check for market order
-            if order.type == 'market':
+            if order.type == TYPE.market:
                 # Determin the Entry Price
                 self.position[symbol].price = open
                 pnl = self.position[symbol].update(order)
