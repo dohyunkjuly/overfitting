@@ -1,19 +1,12 @@
 import math
 import uuid
-from overfitting.functions.type import enum
+from overfitting.functions.type import TYPE, STATUS
 from overfitting.error import InvalidOrder
-
-TYPE = enum('tp', 'sl', 'limit', 'market')
-STATUS = enum(
-    'OPEN', 
-    'CANCELLED', 
-    'FILLED', 
-    'REJECTED'
-)
 
 class Order:
     __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', '_status', 
-                 'stop_price', 'trailing_delta', 'is_triggered','reason']
+                 'stop_price', 'trailing_delta', 'is_triggered','reason',
+                 'commission', 'pnl', 'realized_pnl']
 
     def __init__(self, time, symbol, qty, price, type,
                  stop_price=None, trailing_delta=None):
@@ -33,10 +26,23 @@ class Order:
         self.trailing_delta = trailing_delta
         self.is_triggered = False
         self.reason = None
-    
+        self.commission = 0
+        self.pnl = 0
+        self.realized_pnl = 0
+
         # Check Conditions
         # TO do List
         # 1. Debug _check_trigger_conditions()
+
+    def __repr__(self):
+        return (f"Order(id={self.id}, created_at={self.created_at}, "
+            f"symbol='{self.symbol}', qty={self.qty}, price={self.price}, "
+            f"type={self.type}, status={self._status}, "
+            f"stop_price={self.stop_price}, "
+            f"trailing_delta={self.trailing_delta}, "
+            f"is_triggered={self.is_triggered}, reason='{self.reason}')"
+            f"commission={self.commission}, pnl={self.pnl}")
+
 
     def to_dict(self):
         return {slot: getattr(self, slot) for slot in self.__slots__}
@@ -50,7 +56,7 @@ class Order:
 
     @staticmethod
     def make_id():
-        return uuid.uuid4().hex
+        return uuid.uuid4().hex[:8]
 
     @property
     def status(self):
@@ -63,8 +69,11 @@ class Order:
     def cancel(self):
         self.status = STATUS.CANCELLED
 
-    def fill(self):
+    def fill(self, commission, pnl):
         self.status = STATUS.FILLED
+        self.commission = commission
+        self.pnl = pnl
+        self.realized_pnl = pnl - commission
 
     def rejected(self, reason=''):
         self.status = STATUS.REJECTED

@@ -119,3 +119,16 @@ class Strategy:
         self.returns = r.tolist()
 
         return pd.Series(self.returns, index=t.tolist())
+
+    def plot(self, returns: pd.Series, start_time, end_time):
+        plotting(returns, start_time, end_time, self.broker.initial_captial)
+
+
+    def fetch_trades(self):
+        """
+        Returns the trade history as a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame where each row represents a trade.
+        """
+        return pd.DataFrame(self.broker.trades)

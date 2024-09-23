@@ -76,7 +76,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Culmulative Returns')
     plt.legend()
     plt.grid(True)
-    plt.savefig('../graphs/culmulative_returns.jpg', format = 'jpg')
+    plt.savefig('culmulative_returns.jpg', format = 'jpg')
     plt.show()
 
 
@@ -90,7 +90,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Culmulative Returns on a logartihmic scale')
     plt.legend()
     plt.grid(True)
-    plt.savefig('../graphs/culmulative_returns_log_scale.jpg', format = 'jpg')
+    plt.savefig('culmulative_returns_log_scale.jpg', format = 'jpg')
     plt.show()
 
     # Plot daily returns
@@ -101,7 +101,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Daily Returns')
     plt.legend()
     plt.grid(False)
-    plt.savefig('../graphs/daily_returns.jpg', format = 'jpg')
+    plt.savefig('daily_returns.jpg', format = 'jpg')
     plt.show()
 
 
@@ -117,7 +117,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     monthly_return_heatmap = monthly_return_heatmap * 100
     sns.heatmap(monthly_return_heatmap, cmap=cmap, annot=True, fmt=".1f", center=0)
     plt.title('Monthly retruns (%)')
-    plt.savefig('../graphs/monthly_returns_heatmap.jpg', format = 'jpg')
+    plt.savefig('monthly_returns_heatmap.jpg', format = 'jpg')
     plt.show()
 
     # Plot the Drawdown
@@ -129,7 +129,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Daily Drawdown')
     plt.legend()
     plt.grid(False)
-    plt.savefig('../graphs/daily_drawdown.jpg', format = 'jpg')
+    plt.savefig('daily_drawdown.jpg', format = 'jpg')
     plt.show()
 
     # Plot Sharpe Ratio (6 months)
@@ -150,7 +150,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.xticks(rotation=45)
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
-    plt.savefig('../graphs/rolling_sharpe.jpg', format = 'jpg')
+    plt.savefig('rolling_sharpe.jpg', format = 'jpg')
     plt.show()
 
 
@@ -171,7 +171,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.xticks(rotation=45)
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
-    plt.savefig('../graphs/rolling_volatility.jpg', format = 'jpg')
+    plt.savefig('rolling_volatility.jpg', format = 'jpg')
     plt.show()
 
 
@@ -189,5 +189,5 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Distribution of Monthly Returns')
     plt.legend()
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-    plt.savefig('../graphs/monthly_returns_dist.jpg', format = 'jpg')
+    plt.savefig('monthly_returns_dist.jpg', format = 'jpg')
     plt.show()
