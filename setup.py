@@ -7,5 +7,7 @@ setup(
     description='A Robust CryptoCurrency Backtesting Library.',
     author='Dohyun',
     install_requires=[
+        'pandas',
+        'numpy'
     ],
 )

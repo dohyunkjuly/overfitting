@@ -16,7 +16,6 @@ class Broker:
         self.open_orders: List[Order] = []
         self.position: Dict[str, Position] = {} 
 
-        
         self.trades = []
         self._i = 0
 
@@ -130,7 +129,7 @@ class Broker:
                 
                 # Remove the filled Order
                 self.open_orders.remove(order)
-        
+
 
         # Lastly update index
         self._i += 1
