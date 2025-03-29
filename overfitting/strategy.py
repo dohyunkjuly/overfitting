@@ -82,7 +82,7 @@ class Strategy:
         """
         self.broker.set_leverage(symbol, leverage)
 
-    def get_position(self,symbol):
+    def get_position(self, symbol):
         """Fetch the current position of a specific symbol"""
         return self.broker.get_position(symbol)
 

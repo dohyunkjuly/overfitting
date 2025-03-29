@@ -46,10 +46,13 @@ class Position:
         mm = total_cost * self.maint_margin_rate - self.maint_amount
 
         # Updates margin and liquidation price
-        side = copysign(1, self.qty) * -1
         self.margin = im + mm
-        self.liquid_price = self.price + (im - mm) * side
+        if self.qty > 0: # Long
+            self.liquid_price = self.price - (im - mm)
+        else: # Short
+            self.liquid_price = self.price + (im - mm)
         
+
     def _calculate_pnl(self, txn):
         # Closing Long position
         if txn.qty < 0:

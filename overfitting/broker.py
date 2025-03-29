@@ -77,7 +77,6 @@ class Broker:
         data = self.data
         open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
 
-
         if self._i != 0:
             prev_high = data.high[self._i - 1]
             prev_low  = data.low[self._i - 1]
@@ -90,7 +89,6 @@ class Broker:
 
                 ### TO DO ###
                 # 1. Debug the liquidation logic...
-
                 if ((p.qty > 0 and prev_low <= lp) or 
                     (p.qty < 0 and prev_high >= lp)):
                     print('liquidation')

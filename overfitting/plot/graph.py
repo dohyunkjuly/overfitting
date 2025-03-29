@@ -4,7 +4,6 @@ from numpy.lib.stride_tricks import as_strided
 import math
 import matplotlib.pyplot as plt
 
-#this functions are slower than bottleneck library
 nanmean = np.nanmean
 nanstd = np.nanstd
 nansum = np.nansum
