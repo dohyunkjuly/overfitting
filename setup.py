@@ -4,10 +4,27 @@ setup(
     name='Overfitting',
     version='0.0.1',
     packages=find_packages(),
-    description='A Robust CryptoCurrency Backtesting Library.',
+    license='MIT',
+    description='A Robust Futures CryptoCurrency Backtesting Library.',
     author='Dohyun',
+    author_email='dohyun.k.july@gmail.com',
     install_requires=[
-        'pandas',
-        'numpy'
+        'numpy >= 1.17.0',
+        'pandas >= 0.25.0',
+        'seaborn',
+        'matplotlib',
+        'scipy',
     ],
+    classifiers=[
+        'Intended Audience :: Crypto Traders',
+        'License :: OSI Approved :: MIT License',
+        'Framework :: Jupyter',
+        'Programming Language :: Python',
+        'Operating System :: OS Independent',
+        'Topic :: Investment'
+    ],
+    keywords = [
+        'algo', 'bitcoin', 'ethereum', 'crypto', 'cryptocurrency',
+        'crypto derivatives', 'futures', 'finance', 'quantitative'
+    ]
 )

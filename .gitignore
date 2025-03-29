@@ -13,3 +13,4 @@ test.py
 *.xlsx
 *.csv
 *.jpg
+.DS_Store
