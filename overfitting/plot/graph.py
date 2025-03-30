@@ -362,6 +362,61 @@ def _create_unary_vectorized_roll_function(function):
 
     return unary_vectorized_roll
 
+def trade_summary(gross_returns, return_percents):
+    """
+    Computes summary statistics from trade-level realized PnL and return percentages.
+
+    Parameters
+    ----------
+    gross_returns : list or np.ndarray
+        List of realized PnL values (can include open positions, i.e., non-zero even if not closed).
+        Typically corresponds to `realized_pnl` from all orders.
+    
+    return_percents : list or np.ndarray
+        List of return percentages (only for closed trades with non-zero PnL).
+        Should be filtered to exclude entry-only trades.
+
+    Returns
+    -------
+    pd.Series
+        Summary statistics for trades, including:
+         - total trades (closed trades only)
+         - win/loss counts
+         - win rate
+         - gross/net profit
+         - average returns for winning/losing trades
+    """
+    gross_returns = np.asarray(gross_returns)
+    return_percents = np.asarray(return_percents)
+
+    # Stats from gross_returns (all trades including entries)
+    gross_profit = gross_returns[gross_returns > 0].sum()
+    gross_loss = gross_returns[gross_returns <= 0].sum()
+    net_profit = gross_profit + gross_loss
+
+    # Stats from return_percents (closed trades only)
+    closed_trades = len(return_percents)
+    winning_percents = return_percents[return_percents > 0]
+    losing_percents = return_percents[return_percents <= 0]
+
+    win_rate = (len(winning_percents) / closed_trades) * 100 if closed_trades else 0
+    avg_profit_percent = winning_percents.mean() * 100 if len(winning_percents) else 0
+    avg_loss_percent = losing_percents.mean() * 100 if len(losing_percents) else 0
+    avg_return_percent = return_percents.mean() * 100 if closed_trades else 0
+
+    return pd.Series({
+        "Total Trades": closed_trades,
+        "Winning Trades": len(winning_percents),
+        "Losing Trades": len(losing_percents),
+        "Win Rate (%)": win_rate,
+        "Gross Profit": gross_profit,
+        "Gross Loss": gross_loss,
+        "Net Profit": net_profit,
+        "Avg Return (%)": avg_return_percent,
+        "Avg Profit (%)": avg_profit_percent,
+        "Avg Loss (%)": avg_loss_percent
+    })
+
 
 def sharpe_ratio(returns,
                  risk_free=0,

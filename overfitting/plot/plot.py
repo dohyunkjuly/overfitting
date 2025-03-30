@@ -5,39 +5,32 @@ import overfitting.plot.graph as graph
 from scipy.stats import skew, kurtosis
 import seaborn as sns
 from overfitting.plot.benchmark import backtest_benchmark
+from datetime import datetime
+from typing import Sequence
 
-def custom_log(x):
-    return np.sign(x) * np.log(np.abs(x))
-
-def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital : int):
-
-    cumulative_returns = (1 + returns_series).cumprod()
-    cumulative_return = cumulative_returns[-1]
+def plotting(returns_series: pd.Series,
+             trades_list: Sequence[object],
+             start_time: datetime,
+             end_time: datetime,
+             initial_capital: int,
+             save_path: str =None):
     
+    cumulative_returns = (1 + returns_series).cumprod()
+    cumulative_return = cumulative_returns.iloc[-1]
     final_balance = initial_capital * cumulative_return
 
-    def calculate_cagr(cumulative_return, number_of_years):
-        #Parameters:
-        #- cumulative_return: The cumulative return as a decimal (e.g., 1.5 for a 150% return)
-        #- number_of_years: The number of years over which the return was achieved
-        
-        #Returns:
-        #- The CAGR as a decimal (e.g., 0.1 fo(r a 10% annual return)
+    number_of_years = round((pd.to_datetime(end_time) - pd.to_datetime(start_time)).days / 365 , 1)
 
+    def calculate_cagr(cumulative_return, number_of_years):
         if number_of_years <= 0:
             raise ValueError("Number of years should be greater than 0")
         return (cumulative_return) ** (1 / number_of_years) - 1
-
-    number_of_years = round((pd.to_datetime(end_time) - pd.to_datetime(start_time)).days / 365 , 1)
-    print(f'Number of Years : {number_of_years}')
-
+    
     cagr = calculate_cagr(cumulative_return, number_of_years)
 
-    daily_returns_series = (1+ returns_series).resample('D').prod() -1
-    
-    monthly_returns_series = (1+ returns_series).resample('M').prod() -1
+    daily_returns_series = (1+ returns_series).resample('D').prod() -1    
+    monthly_returns_series = (1+ returns_series).resample('ME').prod() -1
     monthly_returns_series.index = monthly_returns_series.index.strftime('%Y-%m')
-
 
     sharpe_ratio = graph.sharpe_ratio(daily_returns_series, risk_free=0, period='daily')
     sortino_ratio = graph.sortino_ratio(daily_returns_series, required_return=0, period='daily')
@@ -45,52 +38,89 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
 
     cumulative_returns = (1 + daily_returns_series).cumprod()
 
-    peak = cumulative_returns.expanding(min_periods=1).max()
+    def unpack_trades_list(trades_list):
+        df = pd.DataFrame(trades_list)
 
+        # Always include all trades for PnL calc
+        gross_returns = df['realized_pnl'].values
+
+        # Only include trades with PnL ≠ 0 (i.e., closed) for return percentages
+        closed = df[df['pnl'] != 0].copy()
+        notional = (closed['price'].abs() * closed['qty'].abs()).replace(0, np.nan)
+        return_percents = (closed['pnl'] / notional).fillna(0).values
+
+        return gross_returns, return_percents
+        
+    gross_returns, return_percents = unpack_trades_list(trades_list)
+    stats = graph.trade_summary(gross_returns, return_percents)
+
+    peak = cumulative_returns.expanding(min_periods=1).max()
     drawdown = (cumulative_returns/peak) - 1
     daily_value_at_risk = graph.value_at_risk(daily_returns_series, sigma=2, period=None)
     skew_value = skew(monthly_returns_series)
     kurtosis_value = kurtosis(monthly_returns_series, fisher=False)
 
-    print(f"Asset: USDT")
-    print(f"Start Date: {start_time}")
-    print(f"End Date: {end_time}")
-    print(f"Initial Balnace: {initial_capital}")
-    print(f"Final Balance: {final_balance}")
-    print(f'CAGR {cagr}')
-    print(f'Culmulative Return: {cumulative_returns[-1]}')
-    print(f"Sharpe Ratio: {sharpe_ratio}")
-    print(f"Sortino: {sortino_ratio}")
-    print(f"Max Drawdown: {min(drawdown)} ")
-    print(f"Daily Value At Risk: {daily_value_at_risk}")
-    print(f"Skew: {skew_value}")
-    print(f"Kurtosis: {kurtosis_value}")
+    # Create and format the summary dictionary
+    summary = {
+        "Number of Years": number_of_years,
+        "Start Date": start_time,
+        "End Date": end_time,
+        "Initial Balance": float(initial_capital),
+        "Final Balance": final_balance,
+        "CAGR": cagr,
+        "Cumulative Return": cumulative_returns.iloc[-1],
+        "Sharpe Ratio": sharpe_ratio,
+        "Sortino Ratio": sortino_ratio,
+        "Max Drawdown": min(drawdown),
+        "Daily Value At Risk": daily_value_at_risk,
+        "Skew": skew_value,
+        "Kurtosis": kurtosis_value,
+    }
 
+    # Add trade stats
+    summary.update(stats.to_dict())
+    summary_df = pd.DataFrame.from_dict(summary, orient='index', columns=[''])
+
+    summary_df[''] = summary_df[''].apply(
+        lambda x: f"{x:,.8f}" if isinstance(x, float) else x)
+    print('Performance Summary')
+    with pd.option_context('display.colheader_justify', 'left', 'display.width', None):
+        print(summary_df.to_string(header=False))
+    print('\nDrawdown Table')
     print(drawdown_table)
 
+    # Helper function for saveing figure
+    def save_figure(name, save_path=None):
+        if save_path:
+            full_path = save_path + name
+            plt.savefig(full_path, format='jpg')
+            return full_path
+        
     ####### Plot the culmulative returns with benchmark (Incomplete)
     plt.figure(figsize=(12, 6))
-    plt.plot(cumulative_returns, label='Simulation', color = 'green')  
+    plt.plot(cumulative_returns, label='Simulation', color = 'blue')  
     plt.xlabel('Date')
     plt.ylabel('Culmulative Returns')
     plt.title('Culmulative Returns')
     plt.legend()
     plt.grid(True)
-    plt.savefig('culmulative_returns.jpg', format = 'jpg')
+    save_figure('/cumulative_returns.jpg', save_path)
     plt.show()
 
-
+    def custom_log(x):
+        return np.sign(x) * np.log(np.abs(x))
+    
     culmulative_returns_log_scale = cumulative_returns.apply(custom_log)
 
     ####### Plot the culmulative returns on a logartihmic scale with Benchmark (Incomplete)
     plt.figure(figsize=(12,6))
-    plt.plot(culmulative_returns_log_scale, label = 'Simulation', color = 'green')
+    plt.plot(culmulative_returns_log_scale, label = 'Simulation', color = 'blue')
     plt.xlabel('Date')
     plt.ylabel('Culmulative Returns')
     plt.title('Culmulative Returns on a logartihmic scale')
     plt.legend()
     plt.grid(True)
-    plt.savefig('culmulative_returns_log_scale.jpg', format = 'jpg')
+    save_figure('/culmulative_returns.jpg', save_path)
     plt.show()
 
     # Plot daily returns
@@ -101,15 +131,14 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.title('Daily Returns')
     plt.legend()
     plt.grid(False)
-    plt.savefig('daily_returns.jpg', format = 'jpg')
+    save_figure('daily_returns.jpg', save_path)
     plt.show()
-
 
     # Plot Monthly return heatmap
     monthly_return_heatmap = graph.monthly_returns_heatmap(daily_returns_series)
 
     from matplotlib.colors import LinearSegmentedColormap
-    colors = ["red", "white", "green"]
+    colors = ["red", "white", "blue"]
     cmap = LinearSegmentedColormap.from_list("custom", colors, N=100)
 
     plt.figure(figsize=(12, 5))
@@ -117,19 +146,19 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     monthly_return_heatmap = monthly_return_heatmap * 100
     sns.heatmap(monthly_return_heatmap, cmap=cmap, annot=True, fmt=".1f", center=0)
     plt.title('Monthly retruns (%)')
-    plt.savefig('monthly_returns_heatmap.jpg', format = 'jpg')
+    save_figure('monthly_returns_heatmap.jpg', save_path)
     plt.show()
 
     # Plot the Drawdown
     plt.figure(figsize=(12, 6))
-    plt.fill_between(drawdown.index, drawdown.values, color='orange', alpha=1) 
-    plt.plot(drawdown, label='Simulation', color='orange') 
+    plt.fill_between(drawdown.index, drawdown.values, color='red', alpha=1) 
+    plt.plot(drawdown, label='Simulation', color='red') 
     plt.xlabel('Date')
     plt.ylabel('Drawdown')
     plt.title('Daily Drawdown')
     plt.legend()
     plt.grid(False)
-    plt.savefig('daily_drawdown.jpg', format = 'jpg')
+    save_figure('daily_drawdown.jpg', save_path)
     plt.show()
 
     # Plot Sharpe Ratio (6 months)
@@ -141,8 +170,8 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
 
     # Draw graph
     plt.figure(figsize=(10, 6))
-    plt.plot(rolling_sharpe, label='Simulation', color='green')
-    plt.axhline(y=rolling_sharpe_mean_value, color='red', linestyle='--', label=f'Average: {rolling_sharpe_mean_value:.3f}')
+    plt.plot(rolling_sharpe, label='Simulation', color='blue')
+    plt.axhline(y=rolling_sharpe_mean_value, color='grey', linestyle='--', label=f'Average: {rolling_sharpe_mean_value:.3f}')
     plt.xlabel('Date')
     plt.ylabel('Value')
     plt.title('Rolling Sharpe Ratio (6 months)')
@@ -150,7 +179,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.xticks(rotation=45)
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
-    plt.savefig('rolling_sharpe.jpg', format = 'jpg')
+    save_figure('rolling_sharpe.jpg', save_path)
     plt.show()
 
 
@@ -162,8 +191,8 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
 
     # Draw graph
     plt.figure(figsize=(10, 6))
-    plt.plot(rolling_volatility, label='Simulation', color='green')
-    plt.axhline(y=rolling_volatility_mean_value, color='red', linestyle='--', label=f'Simulation Average: {rolling_volatility_mean_value:.3f}')
+    plt.plot(rolling_volatility, label='Simulation', color='blue')
+    plt.axhline(y=rolling_volatility_mean_value, color='grey', linestyle='--', label=f'Simulation Average: {rolling_volatility_mean_value:.3f}')
     plt.xlabel('Date')
     plt.ylabel('Value')
     plt.title('Rolling Volatility (6 months)')
@@ -171,7 +200,7 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.xticks(rotation=45)
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
-    plt.savefig('rolling_volatility.jpg', format = 'jpg')
+    save_figure('rolling_volatility.jpg', save_path)
     plt.show()
 
 
@@ -183,11 +212,11 @@ def plotting(returns_series : pd.Series,  start_time, end_time, initial_capital 
     plt.figure(figsize=(10, 6))
 
     plt.hist(monthly_returns_dist)
-    plt.axvline(x=monthly_returns_dist_mean_value, color='red', linestyle='--', label=f'Average: {monthly_returns_dist_mean_value:.3f}')
+    plt.axvline(x=monthly_returns_dist_mean_value, color='grey', linestyle='--', label=f'Average: {monthly_returns_dist_mean_value:.3f}')
     plt.xlabel('Return')
     plt.ylabel('Frequency')
     plt.title('Distribution of Monthly Returns')
     plt.legend()
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-    plt.savefig('monthly_returns_dist.jpg', format = 'jpg')
+    save_figure('monthly_returns_dist.jpg', save_path)
     plt.show()
