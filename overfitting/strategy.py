@@ -112,7 +112,7 @@ class Strategy:
 
             if i > 0:
                 # Updates the Returns
-                pb = b[i-1]
+                pb = b[i-1] # previous balance
                 r[i] = (b[i] - pb) / pb
 
         self.balances = b.tolist()
@@ -120,9 +120,27 @@ class Strategy:
 
         return pd.Series(self.returns, index=t.tolist())
 
-    def plot(self, returns: pd.Series, start_time, end_time):
-        plotting(returns, start_time, end_time, self.broker.initial_captial)
+    def plot(self, returns: pd.Series, start_time, end_time, save_path=None):
+        """
+        Generates a full performance analysis of the strategy, including trade statistics,
+        performance metrics, and visualizations. Outputs are optionally saved to disk.
 
+        Parameters
+        ----------
+        returns : pd.Series
+            A series of periodic strategy returns indexed by datetime.
+        start_time : datetime
+            The datetime representing the start of the backtest period.
+        end_time : datetime
+            The datetime representing the end of the backtest period.
+        save_path : str, optional
+            The directory path where plots and visual outputs will be saved.
+            If None, plots will only be shown but not saved.
+        """
+        trades_list = self.broker.trades
+        captial = self.broker.initial_captial
+
+        plotting(returns, trades_list, start_time, end_time, captial, save_path)
 
     def fetch_trades(self):
         """
@@ -132,3 +150,19 @@ class Strategy:
             A pandas DataFrame where each row represents a trade.
         """
         return pd.DataFrame(self.broker.trades)
+    
+    def save_trades_to_csv(self, path='', filename="trade_history"):
+        """
+        Save the trade history to a CSV file.
+
+        Parameters
+        ----------
+        path (str): 
+            The directory path where the CSV file will be saved.
+        filename (str):
+            The name of the CSV file to save the trade history to.
+        """
+        full_path = os.path.join(path, filename + '.csv')
+        trade_history_df = self.fetch_trades()
+        
+        trade_history_df.to_csv(full_path, index=False)

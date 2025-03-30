@@ -29,11 +29,7 @@ class Order:
         self.commission = 0
         self.pnl = 0
         self.realized_pnl = 0
-
-        # Check Conditions
-        # TO do List
-        # 1. Debug _check_trigger_conditions()
-
+        
     def __repr__(self):
         return (f"Order(id={self.id}, created_at={self.created_at}, "
             f"symbol='{self.symbol}', qty={self.qty}, price={self.price}, "
@@ -56,7 +52,7 @@ class Order:
 
     @staticmethod
     def make_id():
-        return uuid.uuid4().hex[:8]
+        return uuid.uuid4().hex
 
     @property
     def status(self):

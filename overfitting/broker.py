@@ -73,6 +73,9 @@ class Broker:
     def _calculate_commission(self, order: Order) -> float:
         return abs(order.qty) * order.price * self.commission_rate
 
+    def _execute_trade(self, order: Order):
+        pass
+
     def next(self):
         data = self.data
         open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
@@ -127,7 +130,6 @@ class Broker:
                 
                 # Remove the filled Order
                 self.open_orders.remove(order)
-
 
         # Lastly update index
         self._i += 1
