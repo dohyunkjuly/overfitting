@@ -54,59 +54,59 @@ class Position:
         
 
     def _calculate_pnl(self, txn):
-        # Closing Long position
-        if txn.qty < 0:
-            d = txn.price - self.price
-        else: # Closing Short
-            d = self.price - txn.price
+        """Assumes this is only called during reducing/closing trades"""
+        closing_qty = txn.qty
+        trade_size = abs(closing_qty)
 
-        return d * abs(txn.qty)  # PnL
+        # Closing long position (selling)
+        if closing_qty < 0:
+            pnl_per_unit = txn.price - self.price
+        # Closing short position (buying to cover)
+        else:
+            pnl_per_unit = self.price - txn.price
+
+        return pnl_per_unit * trade_size
 
 
     def update(self, txn):
-        pnl = 0.0
         if self.symbol != txn.symbol:
-            raise Exception("update() updating different symbol.")
+            raise ValueError("Cannot update with a different symbol.")
 
         if txn.qty == 0:
-            raise Exception("update() txn qty cannot be zero.")
+            raise ValueError("Transaction quantity cannot be zero.")
 
+        pnl = 0.0
         total_qty = self.qty + txn.qty
 
-        # Position is closed
+        # Case 1: Position fully closed
         if total_qty == 0:
-            # Settle PnL
             pnl = self._calculate_pnl(txn)
-            self.price, self.liquid_price = 0.0, 0.0
+            self.qty = 0
+            self.price = 0.0
+            self.liquid_price = 0.0
 
-        else: 
-            # Current Position side & Transaction side
-            ts = copysign(1, txn.qty)
-            cs = copysign(1, self.qty) 
+        else:
+            txn_side = copysign(1, txn.qty)
+            current_side = copysign(1, self.qty) if self.qty != 0 else txn_side
 
-            if self.qty == 0:
-                ts = cs
-
-            # Partially closing a position
-            if cs != ts:
+            # Case 2: Partially closing or flipping position
+            if txn_side != current_side:
                 pnl = self._calculate_pnl(txn)
-                # Closing short and opening a long or
-                # closing long and opening a short position
+
+                # If position flips (e.g., long → short or vice versa)
                 if abs(txn.qty) > abs(self.qty):
-                    self.price = txn.price
+                    self.price = txn.price  # new position starts at txn price
+
             else:
-                # Update the entry price
-                position_cost = self.price * self.qty
-                txn_cost = txn.price * txn.qty
-                total_cost = position_cost + txn_cost
-                self.price = total_cost / total_qty
-                
-        # Update the quantity
-        self.qty = total_qty
-        # Then update the liquid price
-        self._update_liquid_price()
+                # Case 3: Adding to an existing position
+                weighted_cost = (self.price * self.qty) + (txn.price * txn.qty)
+                self.price = weighted_cost / total_qty
+
+            self.qty = total_qty
+            self._update_liquid_price()
 
         return pnl
+
 
     def liquidate(self):
         """
@@ -122,8 +122,8 @@ class Position:
         return l
     
     def set_leverage(self, leverage):
-        if leverage <= 0:
-            raise Exception("set_leverage() Invalid Leverage")
+        if leverage <= 0 and leverage > 100:
+            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0~100")
 
         self.leverage = leverage
         self._update_liquid_price()
