@@ -51,7 +51,21 @@ class Position:
             self.liquid_price = self.price - (im - mm)
         else: # Short
             self.liquid_price = self.price + (im - mm)
-        
+    
+    def liquidate(self):
+        l = -self.margin
+        self.qty = 0.0
+        self.price = 0.0
+        self.liquid_price = 0.0
+        self.margin = 0.0
+        return l
+
+    def set_leverage(self, leverage):
+        if leverage <= 0 and leverage > 100:
+            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0~100")
+
+        self.leverage = leverage
+        self._update_liquid_price()
 
     def _calculate_pnl(self, txn):
         """Assumes this is only called during reducing/closing trades"""
@@ -106,27 +120,6 @@ class Position:
             self._update_liquid_price()
 
         return pnl
-
-
-    def liquidate(self):
-        """
-        Liquidates position by resetting quantity, price, 
-        liquidation price, and margin. Returns the loss
-        """
-        l = -self.margin
-        self.qty = 0.0
-        self.price = 0.0
-        self.liquid_price = 0.0
-        self.margin = 0.0
-
-        return l
-    
-    def set_leverage(self, leverage):
-        if leverage <= 0 and leverage > 100:
-            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0~100")
-
-        self.leverage = leverage
-        self._update_liquid_price()
         
     def to_dict(self):
         return{
