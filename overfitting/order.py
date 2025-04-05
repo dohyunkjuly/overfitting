@@ -65,11 +65,13 @@ class Order:
     def cancel(self):
         self.status = STATUS.CANCELLED
 
-    def fill(self, commission, pnl):
+    def fill(self, commission, pnl, reason=None):
         self.status = STATUS.FILLED
         self.commission = commission
         self.pnl = pnl
-        self.realized_pnl = pnl - commission
+        realized = pnl - commission
+        self.realized_pnl = realized
+        self.reason = reason
 
     def rejected(self, reason=''):
         self.status = STATUS.REJECTED

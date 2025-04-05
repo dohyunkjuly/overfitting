@@ -64,50 +64,50 @@ class Broker:
         position.set_leverage(leverage)
         # Check if the position would be liquidated with the new leverage
         lp = position.liquid_price
-        p = self.data.Open[self._i]
+        p = self.data.open[self._i]
 
         if (position.qty > 0 and p <= lp) or \
            (position.qty < 0 and p >= lp):
             raise Exception(f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
 
-    def _execute_trade(self, symbol: str, order: Order,  price: float = None):
-        if price:
+    def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
+        if price: # For Market Orders or Liquidation Orders
             order.price = price
         
-        pnl = self.position[symbol].update(order)
+        if not order.price:
+            raise Exception("Cannot Exeucte Orders without Price.")
+        
         notional = abs(order.qty) * order.price
         commission = notional * self.commission_rate
+        position = self.position[symbol]
+        pnl = position.update(order, liquidation)
 
-        order.fill(commission, pnl)
-        
+        status = 'liquidation' if liquidation else None
+        order.fill(commission, pnl, status)
+
         # Update trades and balance
         self.trades.append(order.to_dict())
-        self.cash += order.realized_pnl        
-        # Remove the filled Order
+        self.cash += order.realized_pnl   
         self.open_orders.remove(order)
 
     def next(self):
         data = self.data
         open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
 
+        # Check Liquidation
         if self._i != 0:
             prev_high = data.high[self._i - 1]
             prev_low  = data.low[self._i - 1]
-
-            # Check for the liquidation price
             for _, s in enumerate(self.position):
-                p = self.position[s] # position
-                lp = p.liquid_price # lp price
-                # Check conditions for liquidation
+                p = self.position[s] 
+                lp = p.liquid_price
+                # Check Liquidation Condition
                 if ((p.qty > 0 and prev_low <= lp) or 
                     (p.qty < 0 and prev_high >= lp)):
-                    margin = p.liquidate()
-                    self.cash -= margin
-                    
-                    
-                    # notional = abs(order.qty) * lp
-                    # commission = notional * self.commission_rate
-                    # order.fill(commission, )
+                    # Create Order for liquidation & Execute
+                    type = 'market' # Market Order for Liquidation Order
+                    order = self.order(p.symbol,  -p.qty, lp, type=type)
+                    self._execute_trade(p.symbol, order, lp, True)
                     
         # Iterate over a shallow copy of the list
         for order in self.open_orders[:]:
@@ -124,7 +124,6 @@ class Broker:
                 elif order.qty < 0 and low < order.price:  # Short condition
                     self._execute_trade(symbol, order)
 
-        # Lastly update index
         self._i += 1
                 
     

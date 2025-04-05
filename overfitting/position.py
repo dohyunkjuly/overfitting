@@ -52,18 +52,18 @@ class Position:
         else: # Short
             self.liquid_price = self.price + (im - mm)
     
-    def liquidate(self):
-        """Returns Margin of the position"""
+    def _liquidate(self):
+        """Returns PNL which is position Margin * -1"""
         l = self.margin
         self.qty = 0.0
         self.price = 0.0
         self.liquid_price = 0.0
         self.margin = 0.0
-        return l
+        return -l
 
     def set_leverage(self, leverage):
         if leverage <= 0 and leverage > 100:
-            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0~100")
+            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0 and 100")
 
         self.leverage = leverage
         self._update_liquid_price()
@@ -82,13 +82,15 @@ class Position:
 
         return pnl_per_unit * trade_size
 
-
-    def update(self, txn):
+    def update(self, txn, liquidation = False):
         if self.symbol != txn.symbol:
             raise ValueError("Cannot update with a different symbol.")
 
         if txn.qty == 0:
             raise ValueError("Transaction quantity cannot be zero.")
+
+        if liquidation:
+            return self._liquidate()
 
         pnl = 0.0
         total_qty = self.qty + txn.qty
