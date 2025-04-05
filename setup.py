@@ -6,8 +6,9 @@ setup(
     packages=find_packages(),
     license='MIT',
     description='A Robust Futures CryptoCurrency Backtesting Library.',
-    author='Dohyun',
+    author='Dohyun Kim',
     author_email='dohyun.k.july@gmail.com',
+    author_github_link='https://github.com/dohyunkjuly',
     install_requires=[
         'numpy >= 1.17.0',
         'pandas >= 0.25.0',
