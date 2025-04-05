@@ -70,11 +70,21 @@ class Broker:
            (position.qty < 0 and p >= lp):
             raise Exception(f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
 
-    def _calculate_commission(self, order: Order) -> float:
-        return abs(order.qty) * order.price * self.commission_rate
+    def _execute_trade(self, symbol: str, order: Order,  price: float = None):
+        if price:
+            order.price = price
+        
+        pnl = self.position[symbol].update(order)
+        notional = abs(order.qty) * order.price
+        commission = notional * self.commission_rate
 
-    def _execute_trade(self, order: Order):
-        pass
+        order.fill(commission, pnl)
+        
+        # Update trades and balance
+        self.trades.append(order.to_dict())
+        self.cash += order.realized_pnl        
+        # Remove the filled Order
+        self.open_orders.remove(order)
 
     def next(self):
         data = self.data
@@ -86,50 +96,33 @@ class Broker:
 
             # Check for the liquidation price
             for _, s in enumerate(self.position):
-                p = self.position[s]
-                lp = p.liquid_price
+                p = self.position[s] # position
+                lp = p.liquid_price # lp price
                 # Check conditions for liquidation
-
-                ### TO DO ###
-                # 1. Debug the liquidation logic...
                 if ((p.qty > 0 and prev_low <= lp) or 
                     (p.qty < 0 and prev_high >= lp)):
-                    print('liquidation')
-                    self.cash += p.liquidate()
+                    margin = p.liquidate()
+                    self.cash -= margin
+                    
+                    
+                    # notional = abs(order.qty) * lp
+                    # commission = notional * self.commission_rate
+                    # order.fill(commission, )
                     
         # Iterate over a shallow copy of the list
         for order in self.open_orders[:]:
             symbol = order.symbol
-            pnl = None 
-
             # Set market order price and update
             if order.type == TYPE.market:
-                order.price = open  # Set Entry Price for Market Order
-                pnl = self.position[symbol].update(order)
-                comission = self._calculate_commission(order)
-
-                order.fill(comission, pnl)
+                # Execute the trade with price being
+                # open price because its market order
+                self._execute_trade(symbol, order, open)
             else:
                 # Check conditions for limit orders
                 if order.qty > 0 and high > order.price:  # Long condition
-                    pnl = self.position[symbol].update(order)
-                    comission = self._calculate_commission(order)
-
-                    order.fill(comission, pnl)
-
+                    self._execute_trade(symbol, order)
                 elif order.qty < 0 and low < order.price:  # Short condition
-                    pnl = self.position[symbol].update(order)
-                    comission = self._calculate_commission(order)
-
-                    order.fill(comission, pnl)
-
-            if pnl is not None:
-                # If pnl is not None, the order was executed
-                self.trades.append(order.to_dict())
-                self.cash += order.realized_pnl
-                
-                # Remove the filled Order
-                self.open_orders.remove(order)
+                    self._execute_trade(symbol, order)
 
         # Lastly update index
         self._i += 1

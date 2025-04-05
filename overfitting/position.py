@@ -53,7 +53,8 @@ class Position:
             self.liquid_price = self.price + (im - mm)
     
     def liquidate(self):
-        l = -self.margin
+        """Returns Margin of the position"""
+        l = self.margin
         self.qty = 0.0
         self.price = 0.0
         self.liquid_price = 0.0
