@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import overfitting.plot.graph as graph
 from scipy.stats import skew, kurtosis
 import seaborn as sns
-from overfitting.plot.benchmark import backtest_benchmark
-from datetime import datetime
 from typing import Sequence
 
 def plotting(returns_series: pd.Series, 

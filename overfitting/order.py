@@ -39,9 +39,19 @@ class Order:
             f"is_triggered={self.is_triggered}, reason='{self.reason}')"
             f"commission={self.commission}, pnl={self.pnl}")
 
-
     def to_dict(self):
-        return {slot: getattr(self, slot) for slot in self.__slots__}
+        result = {}
+        for slot in self.__slots__:
+            value = getattr(self, slot)
+
+            if slot == 'type' and hasattr(value, 'name'):
+                result['type'] = value.name.upper()
+            elif slot == '_status' and hasattr(value, 'name'):
+                result['status'] = value.name.upper()
+            elif slot != '_status':  # Skip _status itself since we renamed it
+                result[slot] = value
+
+        return result
 
     @staticmethod
     def _get_enum_value(enum_type, value, name):
