@@ -62,7 +62,7 @@ class Position:
         return -l
 
     def set_leverage(self, leverage):
-        if leverage <= 0 and leverage > 100:
+        if leverage <= 0 or leverage > 100:
             raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0 and 100")
 
         self.leverage = leverage
