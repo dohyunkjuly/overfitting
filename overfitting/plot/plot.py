@@ -8,13 +8,14 @@ from overfitting.plot.benchmark import backtest_benchmark
 from datetime import datetime
 from typing import Sequence
 
-def plotting(returns_series: pd.Series,
-             trades_list: Sequence[object],
-             start_time: datetime,
-             end_time: datetime,
-             initial_capital: int,
+def plotting(returns_series: pd.Series, 
+             trades_list: Sequence[object], 
+             initial_capital: int, 
              save_path: str =None):
     
+    start_time = returns_series.index.min()
+    end_time = returns_series.index.max()
+
     cumulative_returns = (1 + returns_series).cumprod()
     cumulative_return = cumulative_returns.iloc[-1]
     final_balance = initial_capital * cumulative_return
@@ -80,13 +81,12 @@ def plotting(returns_series: pd.Series,
     # Add trade stats
     summary.update(stats.to_dict())
     summary_df = pd.DataFrame.from_dict(summary, orient='index', columns=[''])
-
     summary_df[''] = summary_df[''].apply(
         lambda x: f"{x:,.8f}" if isinstance(x, float) else x)
+    
     print('Performance Summary')
     with pd.option_context('display.colheader_justify', 'left', 'display.width', None):
         print(summary_df.to_string(header=False))
-    print('\nDrawdown Table')
     print(drawdown_table)
 
     # Helper function for saveing figure

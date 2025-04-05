@@ -120,7 +120,7 @@ class Strategy:
 
         return pd.Series(self.returns, index=t.tolist())
 
-    def plot(self, returns: pd.Series, start_time, end_time, save_path=None):
+    def plot(self, returns: pd.Series, save_path=None):
         """
         Generates a full performance analysis of the strategy, including trade statistics,
         performance metrics, and visualizations. Outputs are optionally saved to disk.
@@ -140,7 +140,7 @@ class Strategy:
         trades_list = self.broker.trades
         captial = self.broker.initial_captial
 
-        plotting(returns, trades_list, start_time, end_time, captial, save_path)
+        plotting(returns, trades_list, captial, save_path)
 
     def fetch_trades(self):
         """
