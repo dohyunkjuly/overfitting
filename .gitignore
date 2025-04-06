@@ -11,6 +11,5 @@ __pycache__/
 test.py
 #data
 *.xlsx
-*.csv
 *.jpg
 .DS_Store
