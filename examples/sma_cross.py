@@ -83,7 +83,13 @@ class MyStrategy(Strategy):
 # Let's run the strategy and plot the results.
 
 # +
-strategy = MyStrategy(backtest_data)
+strategy = MyStrategy(
+    data=backtest_data,
+    initial_capital=100_000,
+    commission_rate=0.0002,
+    maint_maring_rate=0.005,
+    maint_amount=50  
+)
 returns = strategy.run()
 strategy.plot(returns)
 # -
