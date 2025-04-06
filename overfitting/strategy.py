@@ -9,9 +9,10 @@ from overfitting.error import InitializationError
 
 class Strategy:
     def __init__(self, data: pd.DataFrame, *,
-                 initial_capital=1000000,
+                 initial_capital=100000,
                  commission_rate=0.0002,
-                 slippage_rate=0):
+                 maint_maring_rate=0.005,
+                 maint_amount=0):
         # Handles dataframe
         self.data = Data()
         self._conviert_into_numpy(data)
@@ -19,8 +20,9 @@ class Strategy:
         # Initialize Broker class
         self.broker = Broker(self.data, 
                              initial_capital, 
-                             commission_rate, 
-                             slippage_rate)
+                             commission_rate,
+                             maint_maring_rate,
+                             maint_amount)
         
         self.balances = []
         self.returns = []
@@ -85,6 +87,10 @@ class Strategy:
     def get_position(self, symbol):
         """Fetch the current position of a specific symbol"""
         return self.broker.get_position(symbol)
+
+    def get_balance(self):
+        """Fetch the current balance"""
+        return self.broker.cash
 
     def run(self):
         """

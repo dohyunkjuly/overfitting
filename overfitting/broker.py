@@ -6,12 +6,13 @@ from overfitting.position import Position
 from overfitting.functions.type import TYPE
 
 class Broker:
-    def __init__(self, data, cash, commission_rate, slippage_rate):
+    def __init__(self, data, cash, commission_rate, maint_maring_rate, maint_amount):
         self.data = data
         self.initial_captial = cash
         self.cash = self.initial_captial
         self.commission_rate = commission_rate
-        self.slippage_rate = slippage_rate
+        self.maint_maring_rate = maint_maring_rate
+        self.maint_amount = maint_amount
 
         self.open_orders: List[Order] = []
         self.position: Dict[str, Position] = {} 
@@ -20,28 +21,20 @@ class Broker:
         self._i = 0
 
     def __repr__(self):
-        return """
-{class_name}(
-    cash={cash},
-    initial_captial={initial_captial},
-    commission_rate={commissino_rate},
-    slippage_rate={slippage_rate},
-    open_orders={open_orders},
-    order_history={order_history},
-    position={position})
-""".strip().format(class_name=self.__class__.__name__,
-                   cash=self.cash,
-                   initial_captial=self.initial_captial,
-                   commission_rate=self.commission_rate,
-                   slippage_rate=self.slippage_rate,
-                   open_orders=self.open_orders,
-                   order_history=self.order_history,
-                   position=self.position)
-    
+        return (f"Broker("
+                f"initial_capital={self.initial_captial}, "
+                f"cash={self.cash}, "
+                f"commission_rate={self.commission_rate}, "
+                f"maint_margin_rate={self.maint_maring_rate}, "
+                f"maint_amount={self.maint_amount}, "
+                f"open_orders={len(self.open_orders)}, "
+                f"positions={list(self.position.keys())}, "
+                f"trades={len(self.trades)})")
+
     def order(self, symbol: str, qty: float, price: float, *, type: Optional[str]):             
         # Initialize Position Dict if necessary
         if symbol not in self.position:
-            self.position[symbol] = Position(symbol)
+            self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
 
         timestamp = pd.to_datetime(self.data['timestamp'][self._i])
         order = Order(timestamp, symbol, qty, price, type)
