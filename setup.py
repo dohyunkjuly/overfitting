@@ -16,6 +16,18 @@ setup(
         'matplotlib',
         'scipy',
     ],
+    extra_requires={
+        'examples': [
+            'notebook', 
+            'ipykernel', 
+            'ipython'
+        ],
+        'dev': [
+            'black', 
+            'flake',
+            'twine>=4.0.2'
+        ],
+    },
     classifiers=[
         'Intended Audience :: Crypto Traders',
         'License :: OSI Approved :: MIT License',
@@ -26,6 +38,7 @@ setup(
     ],
     keywords = [
         'algo', 'bitcoin', 'ethereum', 'crypto', 'cryptocurrency',
-        'crypto derivatives', 'futures', 'finance', 'quantitative'
+        'crypto derivatives', 'futures', 'finance', 'quantitative',
+        'liquidation', 'solana', 'systematic', 'quant', 'trading'
     ]
 )
