@@ -18,7 +18,7 @@ import pandas as pd
 from overfitting import Strategy  # Your custom backtesting framework
 
 def load_data():
-    df = pd.read_csv('./data/binance_futures_BTCUSDT_1h 2019-09-09-2024-08-29.csv')
+    df = pd.read_csv('./data/BTCUSDT.csv')
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
     df.set_index('open_time', inplace=True)
 
