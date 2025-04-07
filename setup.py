@@ -34,7 +34,7 @@ setup(
         'Framework :: Jupyter',
         'Programming Language :: Python',
         'Operating System :: OS Independent',
-        'Topic :: Investment'
+        'Topic :: Office/Business :: Financial :: Investment',
     ],
     keywords = [
         'algo', 'bitcoin', 'ethereum', 'crypto', 'cryptocurrency',
