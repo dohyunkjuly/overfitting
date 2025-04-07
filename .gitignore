@@ -13,3 +13,8 @@ test.py
 *.xlsx
 *.jpg
 .DS_Store
+
+*.egg-info
+.eggs/*
+__pycache__/*
+dist/*
