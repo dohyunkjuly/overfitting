@@ -1,11 +1,18 @@
 from setuptools import setup, find_packages
+from pathlib import Path
+
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='overfitting',
-    version='0.0.1',
+    version='0.0.2',
     packages=find_packages(),
     license='MIT',
     description='A Robust Futures CryptoCurrency Backtesting Library.',
+    long_description=long_description,
+    long_description_content_type='text/markdown',  # 👈 This tells PyPI it's markdown
+
     author='Dohyun Kim',
     author_email='dohyun.k.july@gmail.com',
     author_github_link='https://github.com/dohyunkjuly',
