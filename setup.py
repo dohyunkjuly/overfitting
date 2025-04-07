@@ -6,7 +6,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='overfitting',
-    version='0.0.2',
+    version='0.0.3',
     packages=find_packages(),
     license='MIT',
     description='A Robust Futures CryptoCurrency Backtesting Library.',
