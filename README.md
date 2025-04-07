@@ -109,10 +109,10 @@ Avg Loss (%)                 -1.51364697
 
 ## Performance Visualizations Examples
 
-![Cumulative Returns](documents/culmulative_returns.png)
-![Daily Drawdowns](documents/daily_drawdowns.png)
-![Monthly Heat Maps](documents/monthly_heat_maps.png)
-![Rolling Sharpe Ratio](documents/rolling_sharpe_ratio.png)
+![Cumulative Returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/culmulative_returns.png)
+![Daily Drawdowns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/daily_drawdowns.png)
+![Monthly Heat Maps](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_heat_maps.png)
+![Rolling Sharpe Ratio](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_sharpe_ratio.png)
 
 ## Liquidation Handling
 
