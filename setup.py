@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='Overfitting',
+    name='overfitting',
     version='0.0.1',
     packages=find_packages(),
     license='MIT',
@@ -29,7 +29,7 @@ setup(
         ],
     },
     classifiers=[
-        'Intended Audience :: Crypto Traders',
+        'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Framework :: Jupyter',
         'Programming Language :: Python',
