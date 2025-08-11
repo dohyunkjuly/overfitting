@@ -1,12 +1,19 @@
 import abc
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.functions.type import TYPE
+from overfitting.functions.type import OrderType
+from overfitting.error import InvalidOrderType
+from overfitting.functions.data import Data
 
 class Broker:
-    def __init__(self, data, cash, commission_rate, maint_maring_rate, maint_amount):
+    def __init__(self,
+                 data: Data, 
+                 cash: float, 
+                 commission_rate: float, 
+                 maint_maring_rate: float, 
+                 maint_amount:float):
         self.data = data
         self.initial_captial = cash
         self.cash = self.initial_captial
@@ -31,11 +38,22 @@ class Broker:
                 f"positions={list(self.position.keys())}, "
                 f"trades={len(self.trades)})")
 
-    def order(self, symbol: str, qty: float, price: float, *, type: Optional[str]):             
+    def order(self, symbol: str, qty: float, price: float, *, type: str):             
         # Initialize Position Dict if necessary
         if symbol not in self.position:
             self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
 
+        if type.upper() == "LIMIT":
+            type = OrderType.LIMIT
+        elif type.upper() == "MARKET":
+            type = OrderType.MARKET
+        elif type.upper() == 'TP':
+            type = OrderType.TP
+        elif type.upper() == 'SL':
+            type = OrderType.SL
+        else:
+            raise InvalidOrderType("Order type must be specified. ex) - LIMIT, MARKET, TP, SL")
+        
         timestamp = pd.to_datetime(self.data['timestamp'][self._i])
         order = Order(timestamp, symbol, qty, price, type)
 
@@ -106,7 +124,7 @@ class Broker:
         for order in self.open_orders[:]:
             symbol = order.symbol
             # Set market order price and update
-            if order.type == TYPE.market:
+            if order.type == OrderType.MARKET:
                 # Execute the trade with price being
                 # open price because its market order
                 self._execute_trade(symbol, order, open)

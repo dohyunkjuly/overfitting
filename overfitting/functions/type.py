@@ -1,19 +1,13 @@
 from enum import Enum
 
-def enum(*args):
-    """
-    Parameters:
-    *args (str): A variable number of string arguments representing the enum names.
+class OrderType(Enum):
+    TP = 0
+    SL = 1
+    LIMIT = 2
+    MARKET = 3
 
-    Returns:
-    Enum: An Enum class with the provided names.
-    """
-    return Enum('Enum', args)
-
-TYPE = enum('tp', 'sl', 'limit', 'market')
-STATUS = enum(
-    'OPEN', 
-    'CANCELLED', 
-    'FILLED', 
-    'REJECTED'
-)
+class Status(Enum):
+    OPEN = 0
+    CANCELLED = 1
+    FILLED = 2
+    REJECTED = 3

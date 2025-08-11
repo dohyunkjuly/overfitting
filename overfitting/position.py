@@ -1,4 +1,5 @@
 from math import copysign
+from overfitting.order import Order
 
 class Position:
     # using __slots__ to save on memory usage.
@@ -68,7 +69,7 @@ class Position:
         self.leverage = leverage
         self._update_liquid_price()
 
-    def _calculate_pnl(self, txn):
+    def _calculate_pnl(self, txn: Order):
         """Assumes this is only called during reducing/closing trades"""
         closing_qty = txn.qty
         trade_size = abs(closing_qty)
@@ -82,7 +83,7 @@ class Position:
 
         return pnl_per_unit * trade_size
 
-    def update(self, txn, liquidation = False):
+    def update(self, txn: Order, liquidation = False):
         if self.symbol != txn.symbol:
             raise ValueError("Cannot update with a different symbol.")
 
