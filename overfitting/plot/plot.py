@@ -5,6 +5,7 @@ import overfitting.plot.graph as graph
 from scipy.stats import skew, kurtosis
 import seaborn as sns
 from typing import Sequence
+from matplotlib.colors import LinearSegmentedColormap
 
 def plotting(returns_series: pd.Series, 
              trades_list: Sequence[object], 
@@ -93,10 +94,10 @@ def plotting(returns_series: pd.Series,
             full_path = save_path + name
             plt.savefig(full_path, format='jpg')
             return full_path
-        
+    
     ####### Plot the culmulative returns with benchmark (Incomplete)
     plt.figure(figsize=(12, 6))
-    plt.plot(cumulative_returns, label='Simulation', color = 'blue')  
+    plt.plot(cumulative_returns, label='Simulation', color ="#656EF2")  
     plt.xlabel('Date')
     plt.ylabel('Culmulative Returns')
     plt.title('Culmulative Returns')
@@ -112,7 +113,7 @@ def plotting(returns_series: pd.Series,
 
     ####### Plot the culmulative returns on a logartihmic scale with Benchmark (Incomplete)
     plt.figure(figsize=(12,6))
-    plt.plot(culmulative_returns_log_scale, label = 'Simulation', color = 'blue')
+    plt.plot(culmulative_returns_log_scale, label = 'Simulation', color = "#656EF2")
     plt.xlabel('Date')
     plt.ylabel('Culmulative Returns')
     plt.title('Culmulative Returns on a logartihmic scale')
@@ -134,9 +135,7 @@ def plotting(returns_series: pd.Series,
 
     # Plot Monthly return heatmap
     monthly_return_heatmap = graph.monthly_returns_heatmap(daily_returns_series)
-
-    from matplotlib.colors import LinearSegmentedColormap
-    colors = ["red", "white", "blue"]
+    colors = ["#8B0000", "white", "#96B0C1"]
     cmap = LinearSegmentedColormap.from_list("custom", colors, N=100)
 
     plt.figure(figsize=(12, 5))
@@ -149,8 +148,8 @@ def plotting(returns_series: pd.Series,
 
     # Plot the Drawdown
     plt.figure(figsize=(12, 6))
-    plt.fill_between(drawdown.index, drawdown.values, color='red', alpha=1) 
-    plt.plot(drawdown, label='Simulation', color='red') 
+    plt.fill_between(drawdown.index, drawdown.values, color="#FF6666", alpha=1) 
+    plt.plot(drawdown, label='Simulation', color="#FF6666") 
     plt.xlabel('Date')
     plt.ylabel('Drawdown')
     plt.title('Daily Drawdown')
@@ -168,7 +167,7 @@ def plotting(returns_series: pd.Series,
 
     # Draw graph
     plt.figure(figsize=(10, 6))
-    plt.plot(rolling_sharpe, label='Simulation', color='blue')
+    plt.plot(rolling_sharpe, label='Simulation', color="#656EF2")
     plt.axhline(y=rolling_sharpe_mean_value, color='grey', linestyle='--', label=f'Average: {rolling_sharpe_mean_value:.3f}')
     plt.xlabel('Date')
     plt.ylabel('Value')
@@ -189,7 +188,7 @@ def plotting(returns_series: pd.Series,
 
     # Draw graph
     plt.figure(figsize=(10, 6))
-    plt.plot(rolling_volatility, label='Simulation', color='blue')
+    plt.plot(rolling_volatility, label='Simulation', color="#656EF2")
     plt.axhline(y=rolling_volatility_mean_value, color='grey', linestyle='--', label=f'Simulation Average: {rolling_volatility_mean_value:.3f}')
     plt.xlabel('Date')
     plt.ylabel('Value')
@@ -209,7 +208,7 @@ def plotting(returns_series: pd.Series,
 
     plt.figure(figsize=(10, 6))
 
-    plt.hist(monthly_returns_dist)
+    plt.hist(monthly_returns_dist, color="#577CBB")
     plt.axvline(x=monthly_returns_dist_mean_value, color='grey', linestyle='--', label=f'Average: {monthly_returns_dist_mean_value:.3f}')
     plt.xlabel('Return')
     plt.ylabel('Frequency')
