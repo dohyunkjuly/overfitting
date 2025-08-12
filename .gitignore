@@ -13,8 +13,8 @@ test.py
 *.xlsx
 *.jpg
 .DS_Store
-
+build
+dist
 *.egg-info
 .eggs/*
 __pycache__/*
-dist/*
