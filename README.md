@@ -11,9 +11,8 @@ The engine is designed to work with **crypto futures price data**, preferably wi
 ### 📁 Required Columns
 
 Your dataset must be a CSV or DataFrame that includes at least the following columns:
-- open_time, open, high, low, close
-  - `open_time` should be a **UNIX timestamp in milliseconds**
-  - It will be used as the DataFrame index
+- timestamp, open, high, low, close
+  - `timestamp` should be a **UNIX timestamp in seconds or milliseconds**
 
 ## Installation
     $ pip install overfitting

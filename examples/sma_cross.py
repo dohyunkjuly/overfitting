@@ -21,7 +21,8 @@ def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
     df.set_index('open_time', inplace=True)
-
+    df.drop(columns=['open_time'], inplace=True)
+    
     start_time = pd.to_datetime('2023-01-01 00:00:00')
     df = df.loc[start_time:]
 
