@@ -14,5 +14,8 @@ class InitializationError(CustomError):
 class EmptyOrderParameters(CustomError):
     pass
 
+class InvalidOrderParameters(CustomError):
+    pass
+
 class InvalidOrderType(CustomError):
     pass
