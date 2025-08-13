@@ -47,13 +47,22 @@ class Strategy:
         """
 
     def limit_order(self, symbol: str, qty: float, price: float):
-        # Place a new limit order using the broker class.
+        # Place a new LIMIT order using the broker class.
         return self.broker.order(symbol, qty, price, type='LIMIT')
 
-    def market_order(self,symbol: str, qty: float):
-        # Place a market order using the broker class.
+    def market_order(self, symbol: str, qty: float):
+        # Place a new MARKET order using the broker class.
         return self.broker.order(symbol, qty, None, type='MARKET')
     
+    def stop_limit_order(self, symbol: str, qty: float, price: float, stop_price: float):
+        # Place a new STOP LIMIT order using the broker class.
+        return self.broker.order(symbol, qty, price, type='STOP', stop_price=stop_price)
+
+    def stop_market_order(self, symbol: str, qty: float, stop_price: float):
+        # Place a new STOP MARKET order using the broker class.
+        return self.broker.order(symbol, qty, None, type='STOP', stop_price=stop_price)
+    
+
     def set_leverage(self, symbol, leverage):
         """
         Sets the leverage for a specific symbol.

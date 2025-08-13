@@ -1,10 +1,9 @@
 from enum import Enum
 
 class OrderType(Enum):
-    TP = 0
-    SL = 1
-    LIMIT = 2
-    MARKET = 3
+    LIMIT = 0
+    MARKET = 1
+    STOP = 2
 
 class Status(Enum):
     OPEN = 0
