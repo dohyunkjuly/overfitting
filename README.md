@@ -6,7 +6,7 @@ Built for speed, simplicity, and accuracy. Overfitting simulates a realistic cry
 ## 📦 Prerequisites
 
 Before using **Overfitting**, you’ll need to provide your own historical data.  
-The engine is designed to work with **crypto futures price data**, preferably with **high-resolution OHLCV format**.
+The engine is designed to work with **crypto futures price data**, with **OHLCV format**.
 
 ### 📁 Required Columns
 
@@ -135,6 +135,27 @@ liquid_price = entry_price - (initial_margin - maintenance_margin)
 liquid_price = entry_price + (initial_margin - maintenance_margin)
 ```
 
+### Types Of Orders
+Supports four order types: LIMIT, MARKET, STOP LIMIT, and STOP MARKET. Each behaves according to standard trading conventions.
+
+For MAKRET Orders, the system will automatically execute the trade with "open" price.
+```python
+# For Long qty > 0 for short qty < 0
+# Example 1. if qty == -1. This means Short
+# Example 2. if qty == 1. This means Long
+limit_order(symbol: str, qty: float, price: float)
+market_order(symbol: str, qty: float)
+stop_limit_order(symbol: str, qty: float, price: float, stop_price: float)
+stop_market_order(symbol: str, qty: float, stop_price: float)
+```
+
+#### Stop Order Immediate Rejection Rule
+If a STOP LIMIT or STOP MARKET order would trigger immediately upon creation (because the current price already breaches the stop price), the system rejects the order with "STOP order would Immediately Trigger" message.
+
+**The Rules for Stop Order to Trigger is:** <br>
+LONG: Price (High) >= Stop Price <br>
+SHORT: Price (low) <= Stop Price
+
 ## Features
 
 - Built-in performance tracking (PnL, drawdown, win rate)
@@ -143,9 +164,6 @@ liquid_price = entry_price + (initial_margin - maintenance_margin)
 - Easy to plug in your own data
 
 ## 🔜 Upcoming Features
-
-- **Take-Profit & Stop-Loss Orders**  
-  Native support for TP/SL orders to simulate more realistic trade management.
 
 - **Parameter Optimizer**  
   A simple optimizer to help find the best-performing strategy parameters (like SMA windows, thresholds, etc.) based on backtest results.
