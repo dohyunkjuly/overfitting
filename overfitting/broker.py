@@ -168,7 +168,8 @@ class Broker:
                         (order.qty < 0 and order.stop_price > open)):
                         # this would trigger the stop order immediately
                         self._reject_order(order, "STOP order would Immedately Trigger")
-        
+                        continue
+
                 if order.is_triggered == False:
                     # Check for the STOP order Trigger Condition
                     if ((order.qty > 0 and high > order.stop_price) or 
