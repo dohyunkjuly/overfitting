@@ -3,12 +3,12 @@
 A robust and modular backtesting engine designed for crypto futures trading strategies.  
 Built for speed, simplicity, and accuracy. Overfitting simulates a realistic crypto trading environment — including **liquidation**, **margin**, and **leverage** — for stress-testing your strategies.
 
-## 📦 Prerequisites
+## Prerequisites
 
 Before using **Overfitting**, you’ll need to provide your own historical data.  
 The engine is designed to work with **crypto futures price data**, with **OHLCV format**.
 
-### 📁 Required Columns
+### Required Columns
 
 Your dataset must be a CSV or DataFrame that includes at least the following columns:
 - timestamp, open, high, low, close
@@ -135,10 +135,14 @@ liquid_price = entry_price - (initial_margin - maintenance_margin)
 liquid_price = entry_price + (initial_margin - maintenance_margin)
 ```
 
-### Types Of Orders
+## Types Of Orders
 Supports four order types: LIMIT, MARKET, STOP LIMIT, and STOP MARKET. Each behaves according to standard trading conventions.
 
-For MAKRET Orders, the system will automatically execute the trade with "open" price.
+[NOTE] For MAKRET Orders, the system will automatically execute the trade with "open" price.
+
+**The Rules for Stop Order to Trigger is:** <br>
+LONG: Price (High) >= Stop Price <br>
+SHORT: Price (low) <= Stop Price
 ```python
 # For Long qty > 0 for short qty < 0
 # Example 1. if qty == -1. This means Short
@@ -149,12 +153,8 @@ stop_limit_order(symbol: str, qty: float, price: float, stop_price: float)
 stop_market_order(symbol: str, qty: float, stop_price: float)
 ```
 
-#### Stop Order Immediate Rejection Rule
+### Stop Order Immediate Rejection Rule
 If a STOP LIMIT or STOP MARKET order would trigger immediately upon creation (because the current price already breaches the stop price), the system rejects the order with "STOP order would Immediately Trigger" message.
-
-**The Rules for Stop Order to Trigger is:** <br>
-LONG: Price (High) >= Stop Price <br>
-SHORT: Price (low) <= Stop Price
 
 ## Features
 
@@ -163,7 +163,7 @@ SHORT: Price (low) <= Stop Price
 - Includes strategy examples (like SMA crossover, 0DTE, RSI stacks)
 - Easy to plug in your own data
 
-## 🔜 Upcoming Features
+## Upcoming Features
 
 - **Parameter Optimizer**  
   A simple optimizer to help find the best-performing strategy parameters (like SMA windows, thresholds, etc.) based on backtest results.
