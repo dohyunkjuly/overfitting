@@ -2,7 +2,6 @@ import math
 import uuid
 import pandas as pd
 from overfitting.functions.type import OrderType, Status
-from overfitting.error import InvalidOrderType
 
 class Order:
     __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', '_status', 

@@ -2,10 +2,12 @@ import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
+from typing import List, Dict
 from overfitting.functions import Data
-from overfitting.plot.plot import plotting
 from overfitting.broker import Broker
-from overfitting.error import InitializationError
+from overfitting.order import Order
+from overfitting.position import Position
+from overfitting.plot.plot import plotting
 
 class Strategy:
     def __init__(self, data: pd.DataFrame, *,
@@ -61,9 +63,8 @@ class Strategy:
     def stop_market_order(self, symbol: str, qty: float, stop_price: float):
         # Place a new STOP MARKET order using the broker class.
         return self.broker.order(symbol, qty, None, type='STOP', stop_price=stop_price)
-    
 
-    def set_leverage(self, symbol, leverage):
+    def set_leverage(self, symbol: str, leverage: int):
         """
         Sets the leverage for a specific symbol.
         Raises an exception if the updated liquidation price would result 
@@ -71,18 +72,24 @@ class Strategy:
         """
         self.broker.set_leverage(symbol, leverage)
 
-    def get_position(self, symbol):
+    def get_position(self, symbol: str) -> Dict[str, Position]:
         """
         Fetch the current position of a specific symbol
         """
         return self.broker.get_position(symbol)
 
-    def get_balance(self):
+    def get_balance(self) -> float:
         """
         Fetch the current balance
         """
         return self.broker.cash
 
+    def get_open_orders(self) -> List[Order]:
+        """
+        Fetch the current open orders
+        """
+        return self.broker.open_orders
+    
     def run(self):
         """
         Executes the strategy over the dataset.
@@ -134,7 +141,7 @@ class Strategy:
 
         plotting(returns, trades_list, captial, save_path)
 
-    def fetch_trades(self):
+    def fetch_trades(self) -> pd.DataFrame:
         """
         Returns the trade history as a pandas DataFrame.
 
