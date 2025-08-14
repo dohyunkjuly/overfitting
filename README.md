@@ -156,13 +156,6 @@ stop_market_order(symbol: str, qty: float, stop_price: float)
 ### Stop Order Immediate Rejection Rule
 If a STOP LIMIT or STOP MARKET order would trigger immediately upon creation (because the current price already breaches the stop price), the system rejects the order with "STOP order would Immediately Trigger" message.
 
-## Features
-
-- Built-in performance tracking (PnL, drawdown, win rate)
-- Fast backtests with Pandas/Numpy
-- Includes strategy examples (like SMA crossover, 0DTE, RSI stacks)
-- Easy to plug in your own data
-
 ## Upcoming Features
 
 - **Parameter Optimizer**  
