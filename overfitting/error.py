@@ -19,3 +19,6 @@ class InvalidOrderParameters(CustomError):
 
 class InvalidOrderType(CustomError):
     pass
+
+class LiquidationError(CustomError):
+    pass
