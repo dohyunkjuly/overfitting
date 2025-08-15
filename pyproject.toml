@@ -1,3 +1,55 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "overfitting"
+version = "0.1.2"
+description = "A Robust Futures CryptoCurrency Backtesting Library."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Dohyun Kim", email = "dohyun.k.july@gmail.com" }
+]
+
+keywords = [
+  "algo", "bitcoin", "ethereum", "crypto", "cryptocurrency",
+  "crypto derivatives", "futures", "finance", "quantitative",
+  "liquidation", "solana", "systematic", "quant", "trading"
+]
+
+classifiers = [
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Framework :: Jupyter",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+  "numpy>=1.17.0",
+  "pandas>=0.25.0",
+  "seaborn",
+  "matplotlib",
+  "scipy",
+]
+
+[project.optional-dependencies]
+examples = ["notebook", "ipykernel", "ipython"]
+dev = ["twine>=4.0.2"]
+
+[project.urls]
+Homepage = "https://github.com/dohyunkjuly/overfitting"
+Source = "https://github.com/dohyunkjuly/overfitting"
+Author = "https://github.com/dohyunkjuly"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "examples*"]
