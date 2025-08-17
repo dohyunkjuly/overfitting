@@ -39,6 +39,7 @@ def plotting(returns_series: pd.Series,
     cumulative_returns = (1 + daily_returns_series).cumprod()
 
     def unpack_trades_list(trades_list):
+        if not trades_list: return [], []
         df = pd.DataFrame(trades_list)
 
         # Always include all trades for PnL calc
