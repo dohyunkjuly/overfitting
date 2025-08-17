@@ -72,7 +72,7 @@ class Strategy:
         """
         self.broker.set_leverage(symbol, leverage)
 
-    def get_position(self, symbol: str) -> Dict[str, Position]:
+    def get_position(self, symbol: str) -> Position:
         """
         Fetch the current position of a specific symbol
         """
@@ -90,7 +90,7 @@ class Strategy:
         """
         return self.broker.open_orders
     
-    def run(self):
+    def run(self) -> pd.Series:
         """
         Executes the strategy over the dataset.
 
