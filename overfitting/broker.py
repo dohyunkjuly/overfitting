@@ -168,8 +168,8 @@ class Broker:
                 # open price because its market order
                 self._execute_trade(symbol, order, open)
             elif order.type == OrderType.LIMIT:
-                if ((order.qty > 0 and high > order.price) or 
-                    (order.qty < 0 and low < order.price)):
+                if ((order.qty > 0 and low < order.price) or 
+                    (order.qty < 0 and high > order.price)):
                     self._execute_trade(symbol, order)
             else:
                 # STOP LIMIT, STOP MARKET Trigger Condition:
