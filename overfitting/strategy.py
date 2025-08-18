@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
-from typing import List, Dict
+from typing import List, Optional
 from overfitting.functions import Data
 from overfitting.broker import Broker
 from overfitting.order import Order
@@ -48,22 +48,25 @@ class Strategy:
         within the `run` method.
         """
 
-    def limit_order(self, symbol: str, qty: float, price: float):
+    def limit_order(self, symbol: str, qty: float, price: float) -> Order:
         # Place a new LIMIT order using the broker class.
         return self.broker.order(symbol, qty, price, type='LIMIT')
 
-    def market_order(self, symbol: str, qty: float):
+    def market_order(self, symbol: str, qty: float) -> Order:
         # Place a new MARKET order using the broker class.
         return self.broker.order(symbol, qty, None, type='MARKET')
     
-    def stop_limit_order(self, symbol: str, qty: float, price: float, stop_price: float):
+    def stop_limit_order(self, symbol: str, qty: float, price: float, stop_price: float) -> Order:
         # Place a new STOP LIMIT order using the broker class.
         return self.broker.order(symbol, qty, price, type='STOP', stop_price=stop_price)
 
-    def stop_market_order(self, symbol: str, qty: float, stop_price: float):
+    def stop_market_order(self, symbol: str, qty: float, stop_price: float) -> Order:
         # Place a new STOP MARKET order using the broker class.
         return self.broker.order(symbol, qty, None, type='STOP', stop_price=stop_price)
 
+    def cancel_order(self, order_id: str) -> Optional[Order]:
+        return self.broker.cancel_order(order_id)
+    
     def set_leverage(self, symbol: str, leverage: int):
         """
         Sets the leverage for a specific symbol.
@@ -88,7 +91,7 @@ class Strategy:
         """
         Fetch the current open orders
         """
-        return self.broker.open_orders
+        return list(self.broker.open_orders)
     
     def run(self) -> pd.Series:
         """

@@ -1,6 +1,6 @@
 import abc
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Optional
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.functions.type import OrderType, Status
@@ -91,13 +91,20 @@ class Broker:
         self.open_orders.append(order)
         return order
     
-    def get_position(self, symbol):
+    def cancel_order(self, order_id: str, reason: str = None) -> Optional[Order]:
+        for i, o in enumerate(self.open_orders):
+            if o.id == order_id:
+                o.cancel(reason)
+                return self.open_orders.pop(i)
+        return None
+
+    def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
             
         return self.position[symbol]
     
-    def set_leverage(self, symbol, leverage):
+    def set_leverage(self, symbol: str, leverage: int):
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
         
