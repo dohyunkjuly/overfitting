@@ -3,8 +3,8 @@ from overfitting.order import Order
 
 class Position:
     # using __slots__ to save on memory usage.
-    __slots__ = ['symbol', "qty", "price", "liquid_price", "symbol", 
-                 "leverage", "margin", "maint_margin_rate", "maint_amount"]
+    __slots__ = ['symbol', "qty", "price", "liquid_price", "leverage", 
+                 "margin", "maint_margin_rate", "maint_amount"]
 
     def __init__(self, 
                  symbol:str =None, 
@@ -20,11 +20,15 @@ class Position:
         self.maint_amount = maint_amount
 
     def __repr__(self):
-        return (f"Position(symbol='{self.symbol}', qty={self.qty}, price={self.price}, "
-                f"liquid_price={self.liquid_price}, leverage={self.leverage}, "
-                f"margin={self.margin}, maint_margin_rate={self.maint_margin_rate}, "
+        return (f"Position("
+                f"symbol='{self.symbol}', "
+                f"qty={self.qty}, "
+                f"price={self.price}, "
+                f"liquid_price={self.liquid_price}, "
+                f"margin={self.margin}, "
+                f"leverage={self.leverage}, "
+                f"maint_margin_rate={self.maint_margin_rate}, "
                 f"maint_amount={self.maint_amount})")
-
 
     def __getattr__(self, attr):
         return object.__getattribute__(self, attr)

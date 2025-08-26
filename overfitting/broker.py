@@ -1,19 +1,19 @@
-import abc
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union, Tuple
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.functions.type import OrderType, Status
-from overfitting.functions.data import Data
+from overfitting.functions.type import OrderType
+from overfitting.functions.data import Data, MultiCurrency
 from overfitting.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
     def __init__(self,
-                 data: Data, 
+                 data: Union[Data, MultiCurrency], 
                  cash: float, 
                  commission_rate: float, 
                  maint_maring_rate: float, 
                  maint_amount:float):
+        
         self.data = data
         self.initial_captial = cash
         self.cash = self.initial_captial
@@ -37,6 +37,25 @@ class Broker:
                 f"open_orders={len(self.open_orders)}, "
                 f"positions={list(self.position.keys())}, "
                 f"trades={len(self.trades)})")
+    
+    def _d(self, symbol: str) -> Data:
+        return self.data[symbol] if isinstance(self.data, MultiCurrency) else self.data
+
+    def _bars(self, symbol: str, i: int) -> Tuple:
+        d = self._d(symbol)
+        return d.open[i], d.high[i], d.low[i], d.close[i]
+
+    def _open(self, symbol: str, i: int):
+        return self._d(symbol).open[i]
+
+    def _high(self, symbol: str, i: int):
+        return self._d(symbol).high[i]
+    
+    def _low(self, symbol: str, i: int):
+        return self._d(symbol).low[i]
+
+    def _close(self, symbol: str, i: int):
+        return self._d(symbol).close[i]
 
     def order(self, 
               symbol: str, 
@@ -76,12 +95,13 @@ class Broker:
         if type == OrderType.LIMIT and price is None:
             raise EmptyOrderParameters("price must be specifed for LIMIT order")
 
-        timestamp = pd.to_datetime(self.data['timestamp'][self._i])
+        timestamp = pd.to_datetime(self.data.index[self._i])
         order = Order(timestamp, symbol, qty, price, type, stop_price)
 
         if type == OrderType.STOP:
-            if ((order.qty > 0 and order.stop_price < self.data.open[self._i]) or
-                (order.qty < 0 and order.stop_price > self.data.open[self._i])):
+            open = self._open(symbol, self._i)
+            if ((order.qty > 0 and order.stop_price < open) or
+                (order.qty < 0 and order.stop_price > open)):
                 # Check if order would be triggered immedately. If True, reject.
                 order.reject("STOP order would Immedately Trigger")
                 self.trades.append(order.to_dict())
@@ -112,13 +132,12 @@ class Broker:
         position.set_leverage(leverage)
         # Check if the position would be liquidated with the new leverage
         lp = position.liquid_price
-        p = self.data.open[self._i]
+        p = self._open(symbol, self._i)
 
         if (position.qty > 0 and p <= lp) or \
            (position.qty < 0 and p >= lp):
             raise LiquidationError(
-                f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}."
-            )
+                f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
 
     def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
         if price: # For Market Orders or Liquidation Orders
@@ -141,27 +160,21 @@ class Broker:
         self.open_orders.remove(order)
 
     def next(self):
-        data = self.data
-        open, high, low = data.open[self._i], data.high[self._i], data.low[self._i]
-
-        # Check Liquidation
-        if self._i != 0:
-            prev_high = data.high[self._i - 1]
-            prev_low  = data.low[self._i - 1]
-            for _, s in enumerate(self.position):
-                p = self.position[s] 
+        if self._i != 0: # Check Liquidation
+            for s, p in list(self.position.items()):
+                _, prev_high, prev_low, _ = self._bars(s, self._i - 1)
                 lp = p.liquid_price
                 # Check Liquidation Condition
                 if ((p.qty > 0 and prev_low <= lp) or 
                     (p.qty < 0 and prev_high >= lp)):
-                    # Create Order for liquidation & Execute
-                    # Market Order for Liquidation Order
+                    # Create MARKET Order for liquidation & Execute
                     order = self.order(p.symbol,  -p.qty, lp, type="MARKET")
                     self._execute_trade(p.symbol, order, lp, True)
                         
         # Iterate over a shallow copy of the list
         for order in self.open_orders[:]:
             symbol = order.symbol
+            open, high, low, _ = self._bars(symbol, self._i)
             # Set market order price and update
             if order.type == OrderType.MARKET:
                 # Execute the trade with price being
@@ -191,10 +204,3 @@ class Broker:
                         self._execute_trade(symbol, order)
         
         self._i += 1
-                
-    
-    
-    
-
-        
-        

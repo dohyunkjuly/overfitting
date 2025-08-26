@@ -2,28 +2,31 @@ import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
-from typing import List, Optional
-from overfitting.functions import Data
+from typing import List, Optional, Union, Dict
+from overfitting.functions.data import Data, MultiCurrency
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.plot.plot import plotting
 
 class Strategy:
-    def __init__(self, data: pd.DataFrame, *,
+    def __init__(self, 
+                 data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
+                 *,
                  initial_capital=100000,
                  commission_rate=0.0002,
                  maint_maring_rate=0.005,
                  maint_amount=0):
-        
-        self.data = Data(data)
+    
+        self.data = MultiCurrency(data) if isinstance(data, dict) else Data(data)
+
         self.broker = Broker(self.data, 
                              initial_capital, 
                              commission_rate,
                              maint_maring_rate,
                              maint_amount)
         self.balances = []
-        self.returns = []
+        self.returns= []
         self.init()
 
     def __repr__(self):
@@ -93,6 +96,34 @@ class Strategy:
         """
         return list(self.broker.open_orders)
     
+    def open(self, symbol: str, i: int):
+        return self.broker._open(symbol, i)
+    
+    def high(self, symbol: str, i: int):
+        return self.broker._high(symbol, i)
+    
+    def low(self, symbol: str, i: int):
+        return self.broker._low(symbol, i)
+    
+    def close(self, symbol: str, i: int):
+        return self.broker._close(symbol, i)
+
+    def bars(self, symbol: str, i: int) -> tuple:
+        """
+        Returns Tuple - open, high, low, close
+        """
+        return self.broker._bars(symbol, i)
+
+    def val(self, symbol: str, i: int, col: str):
+        """
+        Fetch the target column from target index
+        """
+        d: pd.DataFrame = self.broker._d(symbol)
+        target_column = getattr(d, col, None)
+        if target_column is None:
+            raise AttributeError(f"Col '{col}' not found for {symbol}. Available: {', '.join(d.columns)}")
+        return target_column[i]
+
     def run(self) -> pd.Series:
         """
         Executes the strategy over the dataset.
@@ -104,8 +135,7 @@ class Strategy:
         Returns:
             A pandas Series containing the returns, indexed by the corresponding timestamps.
         """
-        t = pd.to_datetime(self.data['timestamp'])
-        # Pre-allocate lists for balance and returns
+        t = pd.to_datetime(self.data.index)
         b = np.zeros(len(t))
         r = np.zeros(len(t))
 
