@@ -25,16 +25,17 @@ from overfitting import Strategy
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
+    benchamrk_df = pd.read_csv('./data/BTCUSDT.csv') # BTC buy and Hold
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
 
     start_time = pd.to_datetime('2023-01-01 00:00:00')
     df = df.loc[start_time:]
+    # Compute short and long SMAs
+    df['sma_short'] = df['close'].rolling(window=20).mean().shift(1)
+    df['sma_long'] = df['close'].rolling(window=50).mean().shift(1)
 
-    df['sma_short'] = df['close'].rolling(window=20).mean().shift()
-    df['sma_long'] = df['close'].rolling(window=50).mean().shift()
-
-    return df
+    return df, benchamrk_df
 
 class MyStrategy(Strategy):
     def init(self):
@@ -71,8 +72,15 @@ class MyStrategy(Strategy):
         if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
             self.market_order(self.asset, -position.qty)
 
-data = load_data()
-strategy = MyStrategy(data)
+backtest_data, benchmark_data = load_data()
+strategy = MyStrategy(
+    data=backtest_data,
+    benchmark=benchmark_data, # Default = None Optional
+    initial_capital=100_000, # Default Optional
+    commission_rate=0.0002, # Default Optional
+    maint_maring_rate=0.005, # Default Optional
+    maint_amount=50  # Default Optional
+)
 returns = strategy.run()
 strategy.plot(returns)
 ```
@@ -81,7 +89,7 @@ Results
 -------
 ```text
 Performance Summary
-Number of Years               1.70000000
+Number of Years               1.66000000
 Start Date           2023-01-01 00:00:00
 End Date             2024-08-29 00:00:00
 Initial Balance         100,000.00000000

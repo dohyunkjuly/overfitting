@@ -19,18 +19,19 @@ from overfitting import Strategy
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
+    benchamrk_df = pd.read_csv('./data/BTCUSDT.csv') # BTC buy and Hold
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
 
     start_time = pd.to_datetime('2023-01-01 00:00:00')
     df = df.loc[start_time:]
     # Compute short and long SMAs
-    df['sma_short'] = df['close'].rolling(window=20).mean().shift()
-    df['sma_long'] = df['close'].rolling(window=50).mean().shift()
+    df['sma_short'] = df['close'].rolling(window=20).mean().shift(1)
+    df['sma_long'] = df['close'].rolling(window=50).mean().shift(1)
 
-    return df
+    return df, benchamrk_df
 
-backtest_data = load_data()
+backtest_data, benchmark_data = load_data()
 print(backtest_data.head())
 # -
 
@@ -88,6 +89,7 @@ class MyStrategy(Strategy):
 # +
 strategy = MyStrategy(
     data=backtest_data,
+    benchmark=benchmark_data,
     initial_capital=100_000,
     commission_rate=0.0002,
     maint_maring_rate=0.005,
