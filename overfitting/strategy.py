@@ -7,19 +7,20 @@ from overfitting.functions.data import Data, MultiCurrency
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.plot.plot import plotting
+from overfitting.plot.performance import PerformanceReport
 
 class Strategy:
     def __init__(self, 
                  data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
                  *,
+                 benchmark: Optional[pd.DataFrame] = None,
                  initial_capital=100000,
                  commission_rate=0.0002,
                  maint_maring_rate=0.005,
                  maint_amount=0):
-    
+            
+        self.benchmark = benchmark
         self.data = MultiCurrency(data) if isinstance(data, dict) else Data(data)
-
         self.broker = Broker(self.data, 
                              initial_capital, 
                              commission_rate,
@@ -156,7 +157,7 @@ class Strategy:
 
         return pd.Series(self.returns, index=t.tolist())
 
-    def plot(self, returns: pd.Series, save_path=None):
+    def plot(self, returns: pd.Series, save_path=None, title="Simulation"):
         """
         Generates a full performance analysis of the strategy, including trade statistics,
         performance metrics, and visualizations. Outputs are optionally saved to disk.
@@ -172,7 +173,13 @@ class Strategy:
         trades_list = self.broker.trades
         captial = self.broker.initial_captial
 
-        plotting(returns, trades_list, captial, save_path)
+        p = PerformanceReport(returns_series=returns, 
+                              trades_list=trades_list, 
+                              initial_capital=captial, 
+                              benchmark=self.benchmark,
+                              save_path=save_path,
+                              title_prefix=title)
+        p.show()
 
     def fetch_trades(self) -> pd.DataFrame:
         """

@@ -1,2 +1,2 @@
-from .plot.plot import plotting
+from .plot.performance import PerformanceReport
 from .strategy import Strategy

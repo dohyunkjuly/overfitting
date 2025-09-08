@@ -476,15 +476,16 @@ def sharpe_ratio(returns,
     returns_risk_adj = np.asanyarray(_adjust_returns(returns, risk_free))
     ann_factor = annualization_factor(period, annualization)
 
-    np.multiply(
-        np.divide(
-            nanmean(returns_risk_adj, axis=0),
-            nanstd(returns_risk_adj, ddof=1, axis=0),
+    with np.errstate(divide='ignore', invalid='ignore'):
+        np.multiply(
+            np.divide(
+                nanmean(returns_risk_adj, axis=0),
+                nanstd(returns_risk_adj, ddof=1, axis=0),
+                out=out,
+            ),
+            np.sqrt(ann_factor),
             out=out,
-        ),
-        np.sqrt(ann_factor),
-        out=out,
-    )
+        )
     if return_1d:
         out = out.item()
 
@@ -565,7 +566,9 @@ def sortino_ratio(returns,
         if _downside_risk is not None else
         downside_risk(returns, required_return, period, annualization)
     )
-    np.divide(average_annual_return, annualized_downside_risk, out=out)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        np.divide(average_annual_return, annualized_downside_risk, out=out)
+        
     if return_1d:
         out = out.item()
     elif isinstance(returns, pd.DataFrame):
