@@ -1,10 +1,10 @@
 import pandas as pd
 from typing import List, Dict, Optional, Union, Tuple
+from overfitting.data import Data, MultiCurrency
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.functions.type import OrderType
-from overfitting.functions.data import Data, MultiCurrency
-from overfitting.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
+from overfitting.utils.entities import OrderType
+from overfitting.utils.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
     def __init__(self,

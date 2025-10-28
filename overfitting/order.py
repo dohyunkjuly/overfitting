@@ -1,13 +1,8 @@
-import math
 import uuid
 import pandas as pd
-from overfitting.functions.type import OrderType, Status
+from overfitting.utils.entities import OrderType, Status
 
 class Order:
-    __slots__ = ['id', 'created_at', 'symbol', 'qty', 'price', 'type', '_status', 
-                 'stop_price', 'is_triggered','reason', 'executed_price',
-                 'commission', 'pnl', 'realized_pnl']
-
     def __init__(self, 
                  time: pd.Timestamp, 
                  symbol: str, 
@@ -40,18 +35,15 @@ class Order:
                 f"commission={self.commission}, pnl={self.pnl}")
 
     def to_dict(self):
-        result = {}
-        for slot in self.__slots__:
-            value = getattr(self, slot)
-
-            if slot == 'type' and hasattr(value, 'name'):
-                result['type'] = value.name.upper()
-            elif slot == '_status' and hasattr(value, 'name'):
-                result['status'] = value.name.upper()
-            elif slot != '_status':
-                result[slot] = value
-
-        return result
+        out = {}
+        for k, v in self.__dict__.items():
+            if k == "_status":
+                out["status"] = v.name
+            elif k == "type":
+                out["type"] = v.name
+            else:
+                out[k] = v
+        return out
     
     @staticmethod
     def make_id():

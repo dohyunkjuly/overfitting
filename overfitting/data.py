@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_float_dtype
-from overfitting.error import InitializationError
+from overfitting.utils.error import InitializationError
 
 REQUIRED_OHLC = ("open", "high", "low", "close")
 

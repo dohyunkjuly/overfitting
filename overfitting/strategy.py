@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from abc import abstractmethod
 from typing import List, Optional, Union, Dict
-from overfitting.functions.data import Data, MultiCurrency
+from overfitting.data import Data, MultiCurrency
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position

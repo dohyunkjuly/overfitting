@@ -2,10 +2,6 @@ from math import copysign
 from overfitting.order import Order
 
 class Position:
-    # using __slots__ to save on memory usage.
-    __slots__ = ['symbol', "qty", "price", "liquid_price", "leverage", 
-                 "margin", "maint_margin_rate", "maint_amount"]
-
     def __init__(self, 
                  symbol:str =None, 
                  maint_margin_rate:float=0.005, 
