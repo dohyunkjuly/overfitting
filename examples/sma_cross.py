@@ -15,7 +15,7 @@
 
 # +
 import pandas as pd
-from overfitting import Strategy 
+from overfitting import Strategy, Slippage
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
@@ -93,7 +93,8 @@ strategy = MyStrategy(
     initial_capital=100_000,
     commission_rate=0.0002,
     maint_maring_rate=0.005,
-    maint_amount=50  
+    maint_amount=50,
+    slippage_model=Slippage.FixedPercent(f=0.001)
 )
 returns = strategy.run()
 strategy.plot(returns)
