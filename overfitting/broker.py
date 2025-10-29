@@ -8,15 +8,14 @@ from overfitting.utils.entities import OrderType
 from overfitting.utils.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
-    def __init__(
-        self,
-        data: Union[Data, MultiCurrency], 
-        cash: float, 
-        commission_rate: float, 
-        maint_maring_rate: float, 
-        maint_amount:float,
-        slippage_model:SlippageModel | None
-    ):
+    def __init__(self,
+                 data: Union[Data, MultiCurrency], 
+                 cash: float, 
+                 commission_rate: float, 
+                 maint_maring_rate: float, 
+                 maint_amount:float,
+                 slippage_model:SlippageModel | None):
+        
         self.data = data
         self.initial_captial = cash
         self.cash = self.initial_captial
@@ -61,15 +60,13 @@ class Broker:
     def _close(self, symbol: str, i: int):
         return self._d(symbol).close[i]
 
-    def order(
-        self, 
-        symbol: str, 
-        qty: float, 
-        price: float, 
-        *, 
-        type: str= OrderType.LIMIT, 
-        stop_price: float= None
-    ) -> Order:       
+    def order(self, 
+              symbol: str, 
+              qty: float, 
+              price: float, 
+              *, 
+              type: str= OrderType.LIMIT, 
+              stop_price: float= None) -> Order:       
         """
         :param str symbol: symbol of the market (Mandatory)
         :param float qty: quantity of the trade (negative for short, Mandatory)

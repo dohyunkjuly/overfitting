@@ -9,15 +9,14 @@ from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import skew, kurtosis
 
 class PerformanceReport:
-    def __init__(
-        self,
-        returns_series: pd.Series,
-        trades_list: Sequence[object],
-        initial_capital: int,
-        benchmark: Optional[pd.DataFrame] = None,
-        save_path: Optional[str] = None,
-        title_prefix: str = "Simulation"
-    ):
+    def __init__(self,
+                 returns_series: pd.Series,
+                 trades_list: Sequence[object],
+                 initial_capital: int,
+                 benchmark: Optional[pd.DataFrame] = None,
+                 save_path: Optional[str] = None,
+                 title_prefix: str = "Simulation"):
+        
         if not isinstance(returns_series.index, pd.DatetimeIndex):
             raise ValueError("returns_series must have a DatetimeIndex")
 

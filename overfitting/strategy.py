@@ -11,17 +11,16 @@ from overfitting.plot.performance import PerformanceReport
 from overfitting.execution.slippage import SlippageModel
 
 class Strategy:
-    def __init__(
-        self, 
-        data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
-        *,
-        benchmark: Optional[pd.DataFrame] = None,
-        initial_capital: float =100000,
-        commission_rate: float =0.0002,
-        maint_maring_rate: float =0.005,
-        maint_amount: float=0,
-        slippage_model: Optional[SlippageModel] = None
-    ):
+    def __init__(self, 
+                 data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
+                 *,
+                 benchmark: Optional[pd.DataFrame] = None,
+                 initial_capital: float =100000,
+                 commission_rate: float =0.0002,
+                 maint_maring_rate: float =0.005,
+                 maint_amount: float=0,
+                 slippage_model: Optional[SlippageModel] = None):
+        
         self.benchmark = benchmark
         self.data = MultiCurrency(data) if isinstance(data, dict) else Data(data)
         self.broker = Broker(
