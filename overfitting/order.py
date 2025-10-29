@@ -3,14 +3,15 @@ import pandas as pd
 from overfitting.utils.entities import OrderType, Status
 
 class Order:
-    def __init__(self, 
-                 time: pd.Timestamp, 
-                 symbol: str, 
-                 qty: float, 
-                 price:float,
-                 type: OrderType,
-                 stop_price: float =None):
-        
+    def __init__(
+        self, 
+        time: pd.Timestamp, 
+        symbol: str, 
+        qty: float, 
+        price:float,
+        type: OrderType,
+        stop_price: float =None
+    ):
         self.id = self.make_id()
         self.created_at = time
         self.symbol = symbol
@@ -21,7 +22,7 @@ class Order:
         self.stop_price = stop_price
         self.is_triggered = False
         self.reason = None
-        self.executed_price = 0 # For Slippage in the future
+        self.executed_price = 0
         self.commission = 0
         self.pnl = 0
         self.realized_pnl = 0

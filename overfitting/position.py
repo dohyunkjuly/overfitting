@@ -2,10 +2,12 @@ from math import copysign
 from overfitting.order import Order
 
 class Position:
-    def __init__(self, 
-                 symbol:str =None, 
-                 maint_margin_rate:float=0.005, 
-                 maint_amount:float=0):
+    def __init__(
+        self, 
+        symbol:str =None, 
+        maint_margin_rate:float=0.005, 
+        maint_amount:float=0
+    ):
         self.symbol = symbol
         self.qty = 0.0
         self.price = 0.0
