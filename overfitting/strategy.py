@@ -8,24 +8,30 @@ from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.plot.performance import PerformanceReport
+from overfitting.execution.slippage import SlippageModel
 
 class Strategy:
-    def __init__(self, 
-                 data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
-                 *,
-                 benchmark: Optional[pd.DataFrame] = None,
-                 initial_capital=100000,
-                 commission_rate=0.0002,
-                 maint_maring_rate=0.005,
-                 maint_amount=0):
-            
+    def __init__(
+        self, 
+        data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
+        *,
+        benchmark: Optional[pd.DataFrame] = None,
+        initial_capital: float =100000,
+        commission_rate: float =0.0002,
+        maint_maring_rate: float =0.005,
+        maint_amount: float=0,
+        slippage_model: Optional[SlippageModel] = None
+    ):
         self.benchmark = benchmark
         self.data = MultiCurrency(data) if isinstance(data, dict) else Data(data)
-        self.broker = Broker(self.data, 
-                             initial_capital, 
-                             commission_rate,
-                             maint_maring_rate,
-                             maint_amount)
+        self.broker = Broker(
+            data=self.data, 
+            cash=initial_capital, 
+            commission_rate=commission_rate,
+            maint_maring_rate=maint_maring_rate,
+            maint_amount=maint_amount,
+            slippage_model=slippage_model
+        )
         self.balances = []
         self.returns= []
         self.init()
@@ -173,12 +179,14 @@ class Strategy:
         trades_list = self.broker.trades
         captial = self.broker.initial_captial
 
-        p = PerformanceReport(returns_series=returns, 
-                              trades_list=trades_list, 
-                              initial_capital=captial, 
-                              benchmark=self.benchmark,
-                              save_path=save_path,
-                              title_prefix=title)
+        p = PerformanceReport(
+            returns_series=returns, 
+            trades_list=trades_list, 
+            initial_capital=captial, 
+            benchmark=self.benchmark,
+            save_path=save_path,
+            title_prefix=title
+        )
         p.show()
 
     def fetch_trades(self) -> pd.DataFrame:

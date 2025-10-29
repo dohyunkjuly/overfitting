@@ -3,23 +3,27 @@ from typing import List, Dict, Optional, Union, Tuple
 from overfitting.data import Data, MultiCurrency
 from overfitting.order import Order
 from overfitting.position import Position
+from overfitting.execution.slippage import SlippageModel
 from overfitting.utils.entities import OrderType
 from overfitting.utils.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
-    def __init__(self,
-                 data: Union[Data, MultiCurrency], 
-                 cash: float, 
-                 commission_rate: float, 
-                 maint_maring_rate: float, 
-                 maint_amount:float):
-        
+    def __init__(
+        self,
+        data: Union[Data, MultiCurrency], 
+        cash: float, 
+        commission_rate: float, 
+        maint_maring_rate: float, 
+        maint_amount:float,
+        slippage_model:SlippageModel | None
+    ):
         self.data = data
         self.initial_captial = cash
         self.cash = self.initial_captial
         self.commission_rate = commission_rate
         self.maint_maring_rate = maint_maring_rate
         self.maint_amount = maint_amount
+        self.slippage_model= slippage_model
 
         self.open_orders: List[Order] = []
         self.position: Dict[str, Position] = {} 
@@ -57,13 +61,15 @@ class Broker:
     def _close(self, symbol: str, i: int):
         return self._d(symbol).close[i]
 
-    def order(self, 
-              symbol: str, 
-              qty: float, 
-              price: float, 
-              *, 
-              type: str= OrderType.LIMIT, 
-              stop_price: float= None) -> Order:       
+    def order(
+        self, 
+        symbol: str, 
+        qty: float, 
+        price: float, 
+        *, 
+        type: str= OrderType.LIMIT, 
+        stop_price: float= None
+    ) -> Order:       
         """
         :param str symbol: symbol of the market (Mandatory)
         :param float qty: quantity of the trade (negative for short, Mandatory)
@@ -139,10 +145,20 @@ class Broker:
             raise LiquidationError(
                 f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
 
+    def _slippage(self, symbol: str, order: Order):
+        if self.slippage_model:
+            bars = self._bars(symbol, self._i)
+            self.slippage_model.set_context(order, bars)
+            return self.slippage_model.compute()
+        
+        return order.price 
+    
     def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
         if price: # For Market Orders or Liquidation Orders
             order.price = price
-        
+        # Lastly Check for slippage    
+        order.price = self._slippage(symbol, order)
+
         if not order.price:
             raise EmptyOrderParameters("Cannot Exeucte Orders without Price.")
         
