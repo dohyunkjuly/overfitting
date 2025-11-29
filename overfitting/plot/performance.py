@@ -41,30 +41,15 @@ class PerformanceReport:
         self.summary_df, self.drawdown_series, self.drawdown_table = self._compute_summary()
 
     def show(self):
-        # Plot cumulative returns vs benchmark
-        self.plot_cumulative()
-
-        # Plot cumulative returns on a log scale vs benchmark
-        self.plot_cumulative_log()
-
-        # Plot daily returns over time
-        self.plot_daily_returns()
-
-        # Plot heatmap of monthly returns (%)
-        self.plot_monthly_heatmap()
-
-        # Plot drawdowns (decimal form)
-        self.plot_drawdown()
-
-        # Plot rolling Sharpe ratio (risk-adjusted returns over time) vs benchmark
-        self.plot_rolling_sharpe()
-
-        # Plot rolling volatility (risk level over time)
-        self.plot_rolling_vol()
-
-        # Plot distribution of monthly returns
-        self.plot_monthly_dist()
-
+        self.plot_cumulative()      # Plot cumulative returns vs benchmark
+        self.plot_cumulative_log()  # Plot cumulative returns on a log scale vs benchmark
+        self.plot_daily_returns()   # Plot daily returns over time
+        self.plot_monthly_heatmap() # Plot heatmap of monthly returns (%)
+        self.plot_drawdown()        # Plot drawdowns (decimal form)
+        self.plot_rolling_sharpe()  # Plot rolling Sharpe ratio (risk-adjusted returns over time) vs benchmark
+        self.plot_rolling_vol()     # Plot rolling volatility (risk level over time)
+        self.plot_monthly_dist()    # Plot distribution of monthly returns
+ 
     def lg(self, x):
         return np.sign(x) * np.log(np.abs(x))
 

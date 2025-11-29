@@ -4,7 +4,7 @@ from overfitting.data import Data, MultiCurrency
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.execution.slippage import SlippageModel
-from overfitting.utils.entities import OrderType
+from overfitting.entities.order import OrderType
 from overfitting.utils.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:

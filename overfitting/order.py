@@ -1,6 +1,6 @@
 import uuid
 import pandas as pd
-from overfitting.utils.entities import OrderType, Status
+from overfitting.entities.order import OrderType, Status
 
 class Order:
     def __init__(self, 
