@@ -27,12 +27,20 @@ class Order:
         self.realized_pnl = 0
         
     def __repr__(self):
-        return (f"Order(id={self.id}, created_at={self.created_at}, "
-                f"symbol='{self.symbol}', qty={self.qty}, price={self.price}, "
-                f"type={self.type}, status={self._status}, "
-                f"stop_price={self.stop_price}, is_triggered={self.is_triggered}"
-                f"reason='{self.reason}', executed_price={self.executed_price}"
-                f"commission={self.commission}, pnl={self.pnl}")
+        return (f"Order(id={self.id}, "
+                f"created_at={self.created_at}, "
+                f"symbol='{self.symbol}', "
+                f"qty={self.qty}, "
+                f"price={self.price}, "
+                f"type={self.type}, "
+                f"status={self._status}, "
+                f"stop_price={self.stop_price}, "
+                f"is_triggered={self.is_triggered}, "
+                f"reason='{self.reason}', "
+                f"executed_price={self.executed_price}, "
+                f"commission={self.commission}, "
+                f"pnl={self.pnl}, " 
+                f"realized_pnl={self.realized_pnl}")
 
     def to_dict(self):
         out = {}

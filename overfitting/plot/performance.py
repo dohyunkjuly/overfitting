@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import overfitting.plot.graph as graph # Helper Functions
-
+import overfitting.plot.graph as graph 
+from overfitting.order import Order
 from typing import Optional, Sequence
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import skew, kurtosis
@@ -11,7 +11,7 @@ from scipy.stats import skew, kurtosis
 class PerformanceReport:
     def __init__(self,
                  returns_series: pd.Series,
-                 trades_list: Sequence[object],
+                 trades_list: Sequence[Order],
                  initial_capital: int,
                  benchmark: Optional[pd.DataFrame] = None,
                  save_path: Optional[str] = None,
