@@ -23,8 +23,12 @@ class Broker:
         self.maint_maring_rate = maint_maring_rate
         self.maint_amount = maint_amount
         self.slippage_model= slippage_model
-
-        self.open_orders: List[Order] = []
+        # open orders example:
+        #   {
+        #       btcusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
+        #       ethusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
+        #   }
+        self.open_orders: Dict[str, Dict[str, Order]] = {}
         self.position: Dict[str, Position] = {} 
 
         self.trades = []
@@ -83,6 +87,9 @@ class Broker:
         if symbol not in self.position:
             self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
 
+        if symbol not in self.open_orders:
+            self.open_orders[symbol] = {}
+
         if type.upper() == "LIMIT":
             type = OrderType.LIMIT
         elif type.upper() == "MARKET":
@@ -111,15 +118,21 @@ class Broker:
                 return order
     
         # Put new order in the open_orders list if not rejected
-        self.open_orders.append(order)
+        self.open_orders[symbol][order.id] = order
         return order
     
-    def cancel_order(self, order_id: str, reason: str = None) -> Optional[Order]:
-        for i, o in enumerate(self.open_orders):
-            if o.id == order_id:
-                o.cancel(reason)
-                return self.open_orders.pop(i)
-        return None
+    def cancel_order(self, symbol, order_id: str, reason: str = None) -> Optional[Order]:
+        if symbol not in self.open_orders:
+            return None
+        
+        if order_id not in self.open_orders[symbol]:
+            return None
+
+        order = self.open_orders[symbol][order_id]
+        order.cancel(reason)
+        del self.open_orders[symbol][order_id]
+
+        return order
 
     def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
@@ -170,7 +183,9 @@ class Broker:
         # Update trades and balance
         self.trades.append(order.to_dict())
         self.cash += order.realized_pnl   
-        self.open_orders.remove(order)
+
+        if symbol in self.open_orders and order.id in self.open_orders[symbol]:
+            del self.open_orders[symbol][order.id]
 
     def next(self):
         if self._i != 0: # Check Liquidation
@@ -184,35 +199,36 @@ class Broker:
                     order = self.order(p.symbol,  -p.qty, lp, type="MARKET")
                     self._execute_trade(p.symbol, order, lp, True)
                         
-        # Iterate over a shallow copy of the list
-        for order in self.open_orders[:]:
-            symbol = order.symbol
+            # 2) Execute open orders (iterate snapshots to avoid mutation issues)
+        for symbol, by_id in list(self.open_orders.items()):
             open, high, low, _ = self._bars(symbol, self._i)
-            # Set market order price and update
-            if order.type == OrderType.MARKET:
-                # Execute the trade with price being
-                # open price because its market order
-                self._execute_trade(symbol, order, open)
-            elif order.type == OrderType.LIMIT:
-                if ((order.qty > 0 and low < order.price) or 
-                    (order.qty < 0 and high > order.price)):
-                    self._execute_trade(symbol, order)
-            else:
-                # STOP LIMIT, STOP MARKET Trigger Condition:
-                # LONG: Current Price >= Stop Price
-                # SHORT: Current Price <= Stop Price
-                if order.is_triggered == False:
-                    # Check for the STOP order Trigger Condition
-                    if ((order.qty > 0 and high >= order.stop_price) or 
-                        (order.qty < 0 and low <= order.stop_price)):
-                        order.trigger() # Trigger the Order
 
-            if order.is_triggered == True:
-                if order.price is None: # STOP MARKET ORDER
-                    self._execute_trade(symbol, order, order.stop_price)
-                else: # STOP LIMIT ORDER
-                    if ((order.qty > 0 and high > order.price) or 
-                        (order.qty < 0 and low < order.price)):
-                        self._execute_trade(symbol, order, order.price)
-        
+            for _, order in list(by_id.items()):
+                # Set market order price and update
+                if order.type == OrderType.MARKET:
+                    # Execute the trade with price being
+                    # open price because its market order
+                    self._execute_trade(symbol, order, open)
+                elif order.type == OrderType.LIMIT:
+                    if ((order.qty > 0 and low < order.price) or 
+                        (order.qty < 0 and high > order.price)):
+                        self._execute_trade(symbol, order)
+                else:
+                    # STOP LIMIT, STOP MARKET Trigger Condition:
+                    # LONG: Current Price >= Stop Price
+                    # SHORT: Current Price <= Stop Price
+                    if order.is_triggered == False:
+                        # Check for the STOP order Trigger Condition
+                        if ((order.qty > 0 and high >= order.stop_price) or 
+                            (order.qty < 0 and low <= order.stop_price)):
+                            order.trigger() # Trigger the Order
+
+                if order.is_triggered == True:
+                    if order.price is None: # STOP MARKET ORDER
+                        self._execute_trade(symbol, order, order.stop_price)
+                    else: # STOP LIMIT ORDER
+                        if ((order.qty > 0 and high > order.price) or 
+                            (order.qty < 0 and low < order.price)):
+                            self._execute_trade(symbol, order, order.price)
+
         self._i += 1

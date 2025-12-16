@@ -73,8 +73,8 @@ class Strategy:
         # Place a new STOP MARKET order using the broker class.
         return self.broker.order(symbol, qty, None, type='STOP', stop_price=stop_price)
 
-    def cancel_order(self, order_id: str) -> Optional[Order]:
-        return self.broker.cancel_order(order_id)
+    def cancel_order(self, symbol, order_id: str) -> Optional[Order]:
+        return self.broker.cancel_order(symbol, order_id)
     
     def set_leverage(self, symbol: str, leverage: int):
         """
@@ -96,12 +96,12 @@ class Strategy:
         """
         return self.broker.cash
 
-    def get_open_orders(self) -> List[Order]:
+    def get_open_orders(self, symbol: str) -> Dict[str, Order]:
         """
         Fetch the current open orders
         """
-        return list(self.broker.open_orders)
-    
+        return dict(self.broker.open_orders.get(symbol, {}))
+
     def open(self, symbol: str, i: int):
         return self.broker._open(symbol, i)
     
@@ -127,7 +127,8 @@ class Strategy:
         d: pd.DataFrame = self.broker._d(symbol)
         target_column = getattr(d, col, None)
         if target_column is None:
-            raise AttributeError(f"Col '{col}' not found for {symbol}. Available: {', '.join(d.columns)}")
+            raise AttributeError(f"Col '{col}' not found for {symbol}.")
+        
         return target_column[i]
 
     def run(self) -> pd.Series:
