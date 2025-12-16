@@ -208,12 +208,11 @@ class Broker:
                         order.trigger() # Trigger the Order
 
             if order.is_triggered == True:
-                if order.price is None:
-                    # STOP MARKET ORDER
-                    self._execute_trade(symbol, order, open)
+                if order.price is None: # STOP MARKET ORDER
+                    self._execute_trade(symbol, order, order.stop_price)
                 else: # STOP LIMIT ORDER
                     if ((order.qty > 0 and high > order.price) or 
                         (order.qty < 0 and low < order.price)):
-                        self._execute_trade(symbol, order)
+                        self._execute_trade(symbol, order, order.price)
         
         self._i += 1
