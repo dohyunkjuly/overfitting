@@ -54,6 +54,7 @@ class Position:
         mm = notional * self.maint_margin_rate - self.maint_amount
 
         self.margin = im + mm
+        delta_p = (im - mm) / q
 
         if self.qty > 0:      # long
             self.liquid_price = self.price - delta_p
