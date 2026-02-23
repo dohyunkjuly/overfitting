@@ -92,7 +92,7 @@ strategy = MyStrategy(
     benchmark=benchmark_data,
     initial_capital=100_000,
     commission_rate=0.0002,
-    maint_maring_rate=0.005,
+    maint_margin_rate=0.005,
     maint_amount=50,
     slippage_model=Slippage.FixedPercent(f=0.001)
 )

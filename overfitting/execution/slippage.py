@@ -13,7 +13,7 @@ class SlippageModel(ABC):
 
 class Zero(SlippageModel):
     def compute(self) -> float:
-        return self.order.price
+        return self.order.theoretical_price
 
 class Skewed(SlippageModel):
     def __init__(self, f: float = 0.15):
@@ -35,7 +35,7 @@ class FixedPercent(SlippageModel):
     
     def compute(self) -> float:
         bump = (1 + self.f) if self.order.qty > 0 else (1 - self.f)
-        return bump * self.order.price
+        return bump * self.order.theoretical_price
     
 
 class Slippage:

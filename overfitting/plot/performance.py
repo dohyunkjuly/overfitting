@@ -216,9 +216,9 @@ class PerformanceReport:
         gross_returns = df.get("realized_pnl", pd.Series(dtype=float)).values
 
         # closed trades only for percentage returns if 'pnl' exists
-        if "pnl" in df and "price" in df and "qty" in df:
+        if "pnl" in df and "executed_price" in df and "qty" in df:
             closed = df[df["pnl"] != 0].copy()
-            notional = (closed["price"].abs() * closed["qty"].abs()).replace(0, np.nan)
+            notional = (closed["executed_price"].abs() * closed["qty"].abs()).replace(0, np.nan)
             return_percents = (closed["pnl"] / notional).ffill().values
         else:
             return_percents = np.array([])

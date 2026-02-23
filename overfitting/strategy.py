@@ -17,7 +17,7 @@ class Strategy:
                  benchmark: Optional[pd.DataFrame] = None,
                  initial_capital: float =100000,
                  commission_rate: float =0.0002,
-                 maint_maring_rate: float =0.005,
+                 maint_margin_rate: float =0.005,
                  maint_amount: float=0,
                  slippage_model: Optional[SlippageModel] = None):
         
@@ -27,7 +27,7 @@ class Strategy:
             data=self.data, 
             cash=initial_capital, 
             commission_rate=commission_rate,
-            maint_maring_rate=maint_maring_rate,
+            maint_margin_rate=maint_margin_rate,
             maint_amount=maint_amount,
             slippage_model=slippage_model
         )
@@ -57,21 +57,30 @@ class Strategy:
         within the `run` method.
         """
 
-    def limit_order(self, symbol: str, qty: float, price: float) -> Order:
-        # Place a new LIMIT order using the broker class.
-        return self.broker.order(symbol, qty, price, type='LIMIT')
+    def limit_order(self, symbol: str, qty: float, price: float, label: Optional[str] = None) -> Order:
+        return self.broker.order(symbol, qty, price, type="LIMIT", label=label)
 
-    def market_order(self, symbol: str, qty: float) -> Order:
-        # Place a new MARKET order using the broker class.
-        return self.broker.order(symbol, qty, None, type='MARKET')
-    
-    def stop_limit_order(self, symbol: str, qty: float, price: float, stop_price: float) -> Order:
-        # Place a new STOP LIMIT order using the broker class.
-        return self.broker.order(symbol, qty, price, type='STOP', stop_price=stop_price)
+    def market_order(self, symbol: str, qty: float, label: Optional[str] = None) -> Order:
+        return self.broker.order(symbol, qty, None, type="MARKET", label=label)
 
-    def stop_market_order(self, symbol: str, qty: float, stop_price: float) -> Order:
-        # Place a new STOP MARKET order using the broker class.
-        return self.broker.order(symbol, qty, None, type='STOP', stop_price=stop_price)
+    def stop_limit_order(
+        self,
+        symbol: str,
+        qty: float,
+        price: float,
+        stop_price: float,
+        label: Optional[str] = None,
+    ) -> Order:
+        return self.broker.order(symbol, qty, price, type="STOP", stop_price=stop_price, label=label)
+
+    def stop_market_order(
+        self,
+        symbol: str,
+        qty: float,
+        stop_price: float,
+        label: Optional[str] = None,
+    ) -> Order:
+        return self.broker.order(symbol, qty, None, type="STOP", stop_price=stop_price, label=label)
 
     def cancel_order(self, symbol, order_id: str) -> Optional[Order]:
         return self.broker.cancel_order(symbol, order_id)

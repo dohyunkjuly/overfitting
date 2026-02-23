@@ -18,7 +18,7 @@ class Position:
 
     def __repr__(self):
         return (f"Position("
-                f"symbol='{self.symbol}', "
+                f"symbol={self.symbol}, "
                 f"qty={self.qty}, "
                 f"price={self.price}, "
                 f"liquid_price={self.liquid_price}, "
@@ -51,8 +51,8 @@ class Position:
 
         notional = self.price * q 
         im = notional / self.leverage
-        mm = notional * self.maint_margin_rate - self.maint_amount
-
+        mm = max(0.0, notional * self.maint_margin_rate - self.maint_amount)       
+         
         self.margin = im + mm
         delta_p = (im - mm) / q
 
@@ -84,10 +84,10 @@ class Position:
 
         # Closing long position (selling)
         if closing_qty < 0:
-            pnl_per_unit = txn.price - self.price
+            pnl_per_unit = txn.executed_price - self.price
         # Closing short position (buying to cover)
         else:
-            pnl_per_unit = self.price - txn.price
+            pnl_per_unit = self.price - txn.executed_price
 
         return pnl_per_unit * trade_size
 
@@ -122,11 +122,11 @@ class Position:
 
                 # If position flips (e.g., long → short or vice versa)
                 if abs(txn.qty) > abs(self.qty):
-                    self.price = txn.price  # new position starts at txn price
+                    self.price = txn.executed_price  # new position starts at txn price
 
             else:
                 # Case 3: Adding to an existing position
-                weighted_cost = (self.price * self.qty) + (txn.price * txn.qty)
+                weighted_cost = (self.price * self.qty) + (txn.executed_price * txn.qty)
                 self.price = weighted_cost / total_qty
 
             self.qty = total_qty

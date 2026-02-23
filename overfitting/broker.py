@@ -12,7 +12,7 @@ class Broker:
                  data: Union[Data, MultiCurrency], 
                  cash: float, 
                  commission_rate: float, 
-                 maint_maring_rate: float, 
+                 maint_margin_rate: float, 
                  maint_amount:float,
                  slippage_model:SlippageModel | None):
         
@@ -20,7 +20,7 @@ class Broker:
         self.initial_captial = cash
         self.cash = self.initial_captial
         self.commission_rate = commission_rate
-        self.maint_maring_rate = maint_maring_rate
+        self.maint_margin_rate = maint_margin_rate
         self.maint_amount = maint_amount
         self.slippage_model= slippage_model
         # open orders example:
@@ -39,7 +39,7 @@ class Broker:
                 f"initial_capital={self.initial_captial}, "
                 f"cash={self.cash}, "
                 f"commission_rate={self.commission_rate}, "
-                f"maint_margin_rate={self.maint_maring_rate}, "
+                f"maint_margin_rate={self.maint_margin_rate}, "
                 f"maint_amount={self.maint_amount}, "
                 f"open_orders={len(self.open_orders)}, "
                 f"positions={list(self.position.keys())}, "
@@ -70,7 +70,8 @@ class Broker:
               price: float, 
               *, 
               type: str= OrderType.LIMIT, 
-              stop_price: float= None) -> Order:       
+              stop_price: float= None,
+              label: str=None) -> Order:       
         """
         :param str symbol: symbol of the market (Mandatory)
         :param float qty: quantity of the trade (negative for short, Mandatory)
@@ -85,7 +86,7 @@ class Broker:
             raise InvalidOrderParameters(f"qty must be a non-empty float. - {qty}")
 
         if symbol not in self.position:
-            self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
+            self.position[symbol] = Position(symbol, self.maint_margin_rate, self.maint_amount)
 
         if symbol not in self.open_orders:
             self.open_orders[symbol] = {}
@@ -106,7 +107,7 @@ class Broker:
             raise EmptyOrderParameters("price must be specifed for LIMIT order")
 
         timestamp = pd.to_datetime(self.data.index[self._i])
-        order = Order(timestamp, symbol, qty, price, type, stop_price)
+        order = Order(timestamp, symbol, qty, price, type, stop_price, label)
 
         if type == OrderType.STOP:
             open = self._open(symbol, self._i)
@@ -146,7 +147,7 @@ class Broker:
 
     def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
-            self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
+            self.position[symbol] = Position(symbol, self.maint_margin_rate, self.maint_amount)
             
         return self.position[symbol]
     
@@ -174,24 +175,23 @@ class Broker:
             self.slippage_model.set_context(order, bars)
             return self.slippage_model.compute()
         
-        return order.price 
+        return order.theoretical_price 
     
     def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
-        if price: # For Market Orders or Liquidation Orders
-            order.price = price
-        # Lastly Check for slippage    
-        order.price = self._slippage(symbol, order)
+        order.theoretical_price = price if price else order.price
+        order.executed_price = self._slippage(symbol, order)
 
-        if not order.price:
-            raise EmptyOrderParameters("Cannot Exeucte Orders without Price.")
+        if not order.theoretical_price:
+            raise EmptyOrderParameters("Cannot Exeucte Orders without Price. Please check the order")
         
-        notional = abs(order.qty) * order.price
+        notional = abs(order.qty) * order.executed_price
         commission = notional * self.commission_rate
         position = self.position[symbol]
         pnl = position.update(order, liquidation)
 
+        timestamp = pd.to_datetime(self.data.index[self._i])
         reason = 'liquidation' if liquidation else None
-        order.fill(commission, pnl, order.price ,reason)
+        order.fill(commission, pnl, order.executed_price, timestamp, reason)
 
         # Update trades and balance
         self.trades.append(order.to_dict())
