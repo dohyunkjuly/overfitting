@@ -134,12 +134,28 @@ class Broker:
 
         return order
 
+    def cancel_all_orders(self, symbol: str, reason: str = None):
+        if symbol not in self.open_orders:
+            return None
+
+        orders = self.open_orders[symbol]
+        for order_id in list(orders.keys()):
+            order = orders[order_id]
+            order.cancel(reason)
+            del orders[order_id]
+
     def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)
             
         return self.position[symbol]
     
+    def close_all_positions(self, symbol: str):
+        position = self.get_position(symbol)
+        
+        if position.qty != 0: # Open position
+            self.order(symbol, -position.qty, None, type="MARKET")      
+
     def set_leverage(self, symbol: str, leverage: int):
         if symbol not in self.position:
             self.position[symbol] = Position(symbol)

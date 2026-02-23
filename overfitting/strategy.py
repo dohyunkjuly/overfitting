@@ -76,6 +76,18 @@ class Strategy:
     def cancel_order(self, symbol, order_id: str) -> Optional[Order]:
         return self.broker.cancel_order(symbol, order_id)
     
+    def cancel_all_orders(self, symbol):
+        """
+        Cancel all open orders for a specific symbol
+        """
+        self.broker.cancel_all_orders(symbol)
+    
+    def close_all_positions(self, symbol):
+        """
+        Close all open positions through market order for a specific symbol
+        """
+        self.broker.close_all_positions(symbol)
+
     def set_leverage(self, symbol: str, leverage: int):
         """
         Sets the leverage for a specific symbol.
