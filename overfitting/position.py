@@ -43,16 +43,22 @@ class Position:
         [LONG] LP = Entry Price - (Initial Margin - Maintenance Margin)
         [SHORT] LP = Entry Price + (Initial Margin - Maintenance Margin)
         """
-        total_cost = self.price * abs(self.qty)
-        im = total_cost / self.leverage 
-        mm = total_cost * self.maint_margin_rate - self.maint_amount
+        q = abs(self.qty)
+        if q == 0:
+            self.liquid_price = 0.0
+            self.margin = 0.0
+            return
 
-        # Updates margin and liquidation price
+        notional = self.price * q 
+        im = notional / self.leverage
+        mm = notional * self.maint_margin_rate - self.maint_amount
+
         self.margin = im + mm
-        if self.qty > 0: # Long
-            self.liquid_price = self.price - (im - mm)
-        else: # Short
-            self.liquid_price = self.price + (im - mm)
+
+        if self.qty > 0:      # long
+            self.liquid_price = self.price - delta_p
+        else:                 # short
+            self.liquid_price = self.price + delta_p
     
     def _liquidate(self):
         """Returns PNL which is position Margin * -1"""
@@ -102,6 +108,7 @@ class Position:
             pnl = self._calculate_pnl(txn)
             self.qty = 0
             self.price = 0.0
+            self.margin = 0.0
             self.liquid_price = 0.0
 
         else:

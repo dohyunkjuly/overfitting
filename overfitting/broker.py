@@ -146,7 +146,7 @@ class Broker:
 
     def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
-            self.position[symbol] = Position(symbol)
+            self.position[symbol] = Position(symbol, self.maint_maring_rate, self.maint_amount)
             
         return self.position[symbol]
     
@@ -156,11 +156,8 @@ class Broker:
         if position.qty != 0: # Open position
             self.order(symbol, -position.qty, None, type="MARKET")      
 
-    def set_leverage(self, symbol: str, leverage: int):
-        if symbol not in self.position:
-            self.position[symbol] = Position(symbol)
-        
-        position = self.position[symbol]
+    def set_leverage(self, symbol: str, leverage: int):        
+        position = self.get_position(symbol)
         position.set_leverage(leverage)
         # Check if the position would be liquidated with the new leverage
         lp = position.liquid_price
