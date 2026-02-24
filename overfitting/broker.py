@@ -225,6 +225,16 @@ class Broker:
                 elif order.type == OrderType.LIMIT:
                     if ((order.qty > 0 and low < order.price) or 
                         (order.qty < 0 and high > order.price)):
+                        # If the order just has been created
+                        if order.created_at == pd.to_datetime(self.data.index[self._i]):
+                            # For example)
+                            # If open price is 100 and places an limit buy order 110
+                            # The order should be executed at 100 not 110
+                            if ((order.qty > 0 and order.price > open) or
+                                (order.qty < 0 and order.price < open)):
+                                self._execute_trade(symbol, order, open)
+                                continue
+                        
                         self._execute_trade(symbol, order)
                 else:
                     # STOP LIMIT, STOP MARKET Trigger Condition:
@@ -240,8 +250,18 @@ class Broker:
                     if order.price is None: # STOP MARKET ORDER
                         self._execute_trade(symbol, order, order.stop_price)
                     else: # STOP LIMIT ORDER
-                        if ((order.qty > 0 and high > order.price) or 
-                            (order.qty < 0 and low < order.price)):
-                            self._execute_trade(symbol, order, order.price)
-
+                        if ((order.qty > 0 and low < order.price) or 
+                            (order.qty < 0 and high > order.price)):
+                            # If the order just has been created
+                            if order.created_at == pd.to_datetime(self.data.index[self._i]):
+                                # For example)
+                                # If open price is 100 and places an limit buy order 110
+                                # The order should be executed at 100 not 110
+                                if ((order.qty > 0 and order.price > open) or
+                                    (order.qty < 0 and order.price < open)):
+                                    self._execute_trade(symbol, order, open)
+                                    continue
+                            
+                            self._execute_trade(symbol, order)
+                    
         self._i += 1
