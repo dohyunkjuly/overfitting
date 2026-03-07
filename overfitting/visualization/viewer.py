@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os, sys, tempfile
 import pandas as pd
 import numpy as np

@@ -5,7 +5,7 @@ from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.execution.slippage import SlippageModel
 from overfitting.entities.order import OrderType
-from overfitting.utils.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
+from overfitting.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
     def __init__(self,

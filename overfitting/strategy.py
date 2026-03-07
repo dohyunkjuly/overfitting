@@ -7,7 +7,7 @@ from overfitting.data import Data, MultiCurrency
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.plot.performance import PerformanceReport
+from overfitting.visualization.report import Report
 from overfitting.execution.slippage import SlippageModel
 
 class Strategy:
@@ -200,7 +200,7 @@ class Strategy:
         trades_list = self.broker.trades
         captial = self.broker.initial_captial
 
-        p = PerformanceReport(
+        p = Report(
             returns_series=returns, 
             trades_list=trades_list, 
             initial_capital=captial, 
@@ -234,3 +234,5 @@ class Strategy:
         trade_history_df = self.fetch_trades()
         
         trade_history_df.to_csv(full_path, index=False)
+
+

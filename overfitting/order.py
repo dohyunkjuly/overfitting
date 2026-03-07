@@ -1,6 +1,7 @@
 import uuid
 import pandas as pd
 from overfitting.entities.order import OrderType, Status
+from enum import Enum
 
 class Order:
     def __init__(self, 

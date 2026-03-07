@@ -16,6 +16,7 @@
 # +
 import pandas as pd
 from overfitting import Strategy, Slippage
+from overfitting.indicator import SMA
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
@@ -25,9 +26,6 @@ def load_data():
 
     start_time = pd.to_datetime('2023-01-01 00:00:00')
     df = df.loc[start_time:]
-    # Compute short and long SMAs
-    df['sma_short'] = df['close'].rolling(window=20).mean().shift(1)
-    df['sma_long'] = df['close'].rolling(window=50).mean().shift(1)
 
     return df, benchamrk_df
 
@@ -52,36 +50,35 @@ class MyStrategy(Strategy):
         self.asset = 'BTC'
         self.set_leverage(self.asset, 1)
 
+        self.sma_short = SMA(self, self.asset, source="close", window=20)
+        self.sma_long = SMA(self, self.asset, source="close", window=50)
+
     def next(self, i):
         if i == 0:
             return
 
-        sma_short = self.val(self.asset, i, "sma_short")
-        sma_long = self.val(self.asset, i, "sma_long")
-        previous_sma_short = self.val(self.asset, i - 1, "sma_short") 
-        previous_sma_long = self.val(self.asset, i - 1, "sma_long")
+        sma_short = self.sma_short[i]
+        sma_long = self.sma_long[i]
+        previous_sma_short = self.sma_short[i - 1]
+        previous_sma_long = self.sma_long[i - 1]
 
-        # Also skip if values are not available
-        if (pd.isna(sma_short) or pd.isna(sma_long) or 
-            pd.isna(previous_sma_short) or pd.isna(previous_sma_long)):
+        if (
+            pd.isna(sma_short) or pd.isna(sma_long) or
+            pd.isna(previous_sma_short) or pd.isna(previous_sma_long)
+        ):
             return
 
-        # Fetch the current position
         position = self.get_position(self.asset)
 
         # Golden cross (entry)
         if previous_sma_short <= previous_sma_long and sma_short > sma_long and position.qty == 0:
-            # First fetch current open price which is the target Price
             open_price = self.open(self.asset, i)
-            # Determine Lot Size
             lot_size = self.get_balance() // open_price
-            # Create LIMIT ORDER
             self.limit_order(self.asset, lot_size, open_price)
 
         # Death cross (exit)
         if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
             self.market_order(self.asset, -position.qty)
-
 # -
 
 # Let's run the strategy and plot the results.

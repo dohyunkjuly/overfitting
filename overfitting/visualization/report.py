@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import overfitting.plot.graph as graph 
+import overfitting.visualization.graph as graph 
 from overfitting.order import Order
 from typing import Optional, Sequence
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import skew, kurtosis
 
-class PerformanceReport:
+class Report:
     def __init__(self,
                  returns_series: pd.Series,
                  trades_list: Sequence[Order],
