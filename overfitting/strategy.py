@@ -8,7 +8,7 @@ from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.analysis.report import Report
-from overfitting.execution.slippage import SlippageModel
+from overfitting.slippage import SlippageModel
 
 class Strategy:
     def __init__(self, 

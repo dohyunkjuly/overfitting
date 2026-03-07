@@ -3,9 +3,9 @@ from typing import List, Dict, Optional, Union, Tuple
 from overfitting.data import Data, MultiCurrency
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.execution.slippage import SlippageModel
-from overfitting.entities.order import OrderType
-from overfitting.error import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
+from overfitting.slippage import SlippageModel
+from overfitting.types import OrderType
+from overfitting.errors import EmptyOrderParameters, InvalidOrderParameters, LiquidationError
 
 class Broker:
     def __init__(self,

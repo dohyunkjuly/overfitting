@@ -16,7 +16,7 @@
 # +
 import pandas as pd
 from overfitting import Strategy, Slippage
-from overfitting.indicator import SMA
+from overfitting.indicators import SMA
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')

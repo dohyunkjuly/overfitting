@@ -14,7 +14,7 @@
 import pandas as pd
 from typing import Dict
 from overfitting import Strategy
-from overfitting.indicator import SMA
+from overfitting.indicators import SMA
 
 # Constants
 DATA_PATHS={
