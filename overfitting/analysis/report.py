@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import overfitting.visualization.graph as graph 
+import overfitting.analysis.graph as graph 
 from overfitting.order import Order
 from typing import Optional, Sequence
 from matplotlib.colors import LinearSegmentedColormap

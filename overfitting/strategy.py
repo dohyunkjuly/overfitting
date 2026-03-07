@@ -7,7 +7,7 @@ from overfitting.data import Data, MultiCurrency
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.visualization.report import Report
+from overfitting.analysis.report import Report
 from overfitting.execution.slippage import SlippageModel
 
 class Strategy:
