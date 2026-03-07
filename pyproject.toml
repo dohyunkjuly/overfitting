@@ -36,6 +36,8 @@ dependencies = [
   "seaborn",
   "matplotlib",
   "scipy",
+  "plotly",
+  "PySide6",
 ]
 
 [project.optional-dependencies]
