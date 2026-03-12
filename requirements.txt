@@ -1,0 +1,7 @@
+numpy>=1.17.0
+pandas>=0.25.0
+seaborn
+matplotlib
+scipy
+PySide6
+plotly

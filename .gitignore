@@ -1,0 +1,20 @@
+__pycache__/
+.venv/
+*test*
+*.py[cod]
+/myenv
+# dependencies
+*node_modules
+/.pnp
+.pnp.js
+.vscode
+test.py
+#data
+*.xlsx
+*.jpg
+.DS_Store
+build
+dist
+*.egg-info
+.eggs/*
+__pycache__/*
