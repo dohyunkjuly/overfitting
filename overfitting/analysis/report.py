@@ -41,6 +41,7 @@ class Report:
         self.summary_df, self.drawdown_series, self.drawdown_table = self._compute_summary()
 
     def show(self):
+        self._print_summary(self.summary_df, self.drawdown_table)
         self.plot_cumulative()      # Plot cumulative returns vs benchmark
         self.plot_cumulative_log()  # Plot cumulative returns on a log scale vs benchmark
         self.plot_daily_returns()   # Plot daily returns over time
@@ -225,24 +226,29 @@ class Report:
         return gross_returns, return_percents
 
     def _compute_summary(self):
+        drawdown = self._compute_drawdown()
+        return_stats = self._compute_return_stats(drawdown)
+        trade_stats = self._compute_trade_stats()
+
+        summary_df = self._format_summary({**return_stats, **trade_stats})
+        dd_table = graph.show_worst_drawdown_periods(self.daily_returns)
+        return summary_df, drawdown, dd_table
+
+    def _compute_drawdown(self):
         peak = self.cum.expanding(min_periods=1).max()
-        drawdown = (self.cum / peak) - 1
-        dvt = graph.value_at_risk(self.daily_returns, sigma=2, period=None)
+        return (self.cum / peak) - 1
 
-        # monthly stats for skew/kurt
-        monthly = (1 + self.daily_returns).resample("ME").prod().sub(1)
-        monthly.index = monthly.index.strftime("%Y-%m")
-        skew_val = skew(monthly) if len(monthly) > 2 else np.nan
-        kurt_val = kurtosis(monthly, fisher=False) if len(monthly) > 2 else np.nan
-
+    def _compute_return_stats(self, drawdown):
         years = max(1e-9, (pd.to_datetime(self.end) - pd.to_datetime(self.start)).days / 365)
         cum_return = float(self.cum.iloc[-1])
         cagr = (cum_return ** (1 / years)) - 1 if cum_return > 0 else np.nan
 
-        sharpe = graph.sharpe_ratio(self.daily_returns, risk_free=0, period="daily")
-        sortino = graph.sortino_ratio(self.daily_returns, required_return=0, period="daily")
+        monthly = (1 + self.daily_returns).resample("ME").prod().sub(1)
+        has_monthly = len(monthly) > 2
+        skew_val = float(skew(monthly)) if has_monthly else np.nan
+        kurt_val = float(kurtosis(monthly, fisher=False)) if has_monthly else np.nan
 
-        summary = {
+        return {
             "Number of Years": round(years, 2),
             "Start Date": self.start,
             "End Date": self.end,
@@ -250,26 +256,24 @@ class Report:
             "Final Balance": self.initial_capital * cum_return,
             "CAGR": cagr,
             "Cumulative Return": cum_return,
-            "Sharpe Ratio": sharpe,
-            "Sortino Ratio": sortino,
+            "Sharpe Ratio": graph.sharpe_ratio(self.daily_returns, risk_free=0, period="daily"),
+            "Sortino Ratio": graph.sortino_ratio(self.daily_returns, required_return=0, period="daily"),
             "Max Drawdown": float(drawdown.min()),
-            "Daily Value At Risk": float(dvt),
-            "Skew": float(skew_val) if pd.notna(skew_val) else np.nan,
-            "Kurtosis": float(kurt_val) if pd.notna(kurt_val) else np.nan,
+            "Daily Value At Risk": float(graph.value_at_risk(self.daily_returns, sigma=2, period=None)),
+            "Skew": skew_val,
+            "Kurtosis": kurt_val,
         }
 
-        # trade stats
-        stats = graph.trade_summary(self.gross_returns, self.return_percents)
-        summary.update(stats.to_dict())
+    def _compute_trade_stats(self):
+        return graph.trade_summary(self.gross_returns, self.return_percents).to_dict()
 
+    def _format_summary(self, summary: dict):
         df = pd.DataFrame.from_dict(summary, orient="index", columns=[""])
         df[""] = df[""].apply(lambda x: f"{x:,.8f}" if isinstance(x, float) else x)
+        return df
 
+    def _print_summary(self, summary_df, dd_table):
         print("Performance Summary")
         with pd.option_context("display.colheader_justify", "left", "display.width", None):
-            print(df.to_string(header=False))
-
-        dd_table = graph.show_worst_drawdown_periods(self.daily_returns)
+            print(summary_df.to_string(header=False))
         print(dd_table)
-
-        return df, drawdown, dd_table

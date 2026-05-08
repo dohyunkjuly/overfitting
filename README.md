@@ -63,9 +63,9 @@ class MyStrategy(Strategy):
         if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
             self.market_order(self.asset, -position.qty)
 
-backtest_data, benchmark_data = load_data()
+price_df, benchmark_data = load_data()
 strategy = MyStrategy(
-    data=backtest_data,
+    data={"BTC": price_df},
     benchmark=benchmark_data, # Default = None Optional
     initial_capital=100_000, # Default Optional
     commission_rate=0.0002, # Default Optional

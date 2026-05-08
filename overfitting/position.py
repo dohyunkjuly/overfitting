@@ -1,118 +1,104 @@
-from math import copysign
 from overfitting.order import Order
 
 class Position:
-    def __init__(self, 
-                 symbol:str =None, 
-                 maint_margin_rate:float=0.005, 
-                 maint_amount:float=0):
-        
+    def __init__(self, symbol: str, maint_margin_rate: float = 0.005, maint_amount: float = 0):
         self.symbol = symbol
-        self.qty = 0.0
-        self.price = 0.0
-        self.liquid_price = 0.0
-        self.margin = 0.0
-        self.leverage = 1 # Default Leverage
         self.maint_margin_rate = maint_margin_rate
         self.maint_amount = maint_amount
+        self.leverage = 1
 
-    def __repr__(self):
-        return (f"Position("
-                f"symbol={self.symbol}, "
-                f"qty={self.qty}, "
-                f"price={self.price}, "
-                f"liquid_price={self.liquid_price}, "
-                f"margin={self.margin}, "
-                f"leverage={self.leverage}, "
-                f"maint_margin_rate={self.maint_margin_rate}, "
-                f"maint_amount={self.maint_amount})")
-
-    def _update_liquid_price(self):
-        """
-        NOTE: liquidation price is calculated based on ISOLATED mode.
-
-        Liquidation Price Calculation:
-        * Initial Margin = price * size / leverage
-        * Maint Margin = price * size * margin rate - margin amount
-        [LONG] LP = Entry Price - (Initial Margin - Maintenance Margin)
-        [SHORT] LP = Entry Price + (Initial Margin - Maintenance Margin)
-        """
-        q = abs(self.qty)
-        if q == 0:
-            self.liquid_price = 0.0
-            self.margin = 0.0
-            return
-
-        notional = self.price * q 
-        im = notional / self.leverage
-        mm = max(0.0, notional * self.maint_margin_rate - self.maint_amount)       
-         
-        self.margin = im + mm
-        delta_p = (im - mm) / q
-
-        if self.qty > 0:      # long
-            self.liquid_price = self.price - delta_p
-        else:                 # short
-            self.liquid_price = self.price + delta_p
-    
-    def _liquidate(self):
-        """Returns PNL which is position margin * -1"""
-        pnl = -self.margin
-        self._reset()
-        return pnl
-
-    def _reset(self):
+        # Open-position state. All zero when flat.
         self.qty = 0.0
         self.price = 0.0
-        self.liquid_price = 0.0
         self.margin = 0.0
+        self.liquid_price = 0.0
 
-    def set_leverage(self, leverage):
+    def __repr__(self):
+        return (f"Position(symbol={self.symbol}, qty={self.qty}, price={self.price}, "
+                f"liquid_price={self.liquid_price}, margin={self.margin}, "
+                f"leverage={self.leverage})")
+
+    def _recalc_liquidation(self) -> None:
+        """
+        Liquidation (isolated margin):
+            notional       = abs(qty) * entry_price
+            initial_margin = notional / leverage
+            maint_margin   = max(0, notional * maint_margin_rate - maint_amount)
+
+            long  liquidation = entry - (initial_margin - maint_margin) / abs(qty)
+            short liquidation = entry + (initial_margin - maint_margin) / abs(qty)
+        """
+        size = abs(self.qty)
+        if size == 0:
+            # Flat — no margin tied up and no liquidation price to track.
+            self.margin = 0.0
+            self.liquid_price = 0.0
+            return
+
+        # Isolated-margin model.
+        # initial_margin: what we lock up to open the position at this leverage.
+        # maint_margin:   cushion the exchange requires before forcing liquidation.
+        notional = self.price * size
+        initial_margin = notional / self.leverage
+        maint_margin = max(0.0, notional * self.maint_margin_rate - self.maint_amount)
+
+        self.margin = initial_margin + maint_margin
+
+        # How far the price can move against us before we get liquidated.
+        # Long: liquidates when price drops by `offset`.
+        # Short: liquidates when price rises by `offset`.
+        offset = (initial_margin - maint_margin) / size
+        self.liquid_price = self.price - offset if self.qty > 0 else self.price + offset
+
+    def _add_to_position(self, order: Order) -> None:
+        new_qty = self.qty + order.qty
+        self.price = (self.price * self.qty + order.executed_price * order.qty) / new_qty
+        self.qty = new_qty
+        self._recalc_liquidation()
+
+    def _reset(self) -> None:
+        self.qty = 0.0
+        self.price = 0.0
+        self.margin = 0.0
+        self.liquid_price = 0.0
+
+    def set_leverage(self, leverage: int) -> None:
         if leverage <= 0 or leverage > 100:
-            raise Exception("set_leverage() Invalid Leverage. Please Choose Between 0 and 100")
-
+            raise Exception("Leverage must be between 1 and 100.")
         self.leverage = leverage
-        self._update_liquid_price()
+        self._recalc_liquidation()
 
-    def _calculate_realized_pnl(self, entry_price: float, exit_price: float, qty: float, side: float):
-        """
-        side > 0 : position is long
-        side < 0 : position is short
-        """
-        if side > 0:
-            return (exit_price - entry_price) * qty
-        return (entry_price - exit_price) * qty
-    
     def process_trade(self, order: Order, liquidation: bool = False) -> float:
-        if self.symbol != order.symbol:
-            raise ValueError("Cannot process trade with a different symbol.")
+        """Apply an executed order. Returns realized PnL (commission excluded)."""
+        if order.symbol != self.symbol:
+            raise ValueError(f"Order symbol {order.symbol!r} doesn't match position {self.symbol!r}.")
         if order.qty == 0:
-            raise ValueError("Transaction quantity cannot be zero.")
-        
-        if liquidation:
-            return self._liquidate()
+            raise ValueError("Order quantity cannot be zero.")
 
-        same_side = self.qty == 0 or (self.qty * order.qty > 0)
-
-        if same_side:
-            total = self.qty + order.qty
-            self.price = (self.price * self.qty + order.executed_price * order.qty) / total
-            self.qty = total
-            self._update_liquid_price()
-            return 0.0
-
-        # Opposite side — reduce, close, or flip
-        close_qty = min(abs(self.qty), abs(order.qty))
-        side = 1 if self.qty > 0 else -1
-        pnl = self._calculate_realized_pnl(self.price, order.executed_price, close_qty, side)
-
-        self.qty += order.qty
-
-        if self.qty == 0:
+        if liquidation: # Force liquidation
+            loss = -self.margin
             self._reset()
-        else: # flip or reduce
-            if self.qty * order.qty > 0:  # flipped
-                self.price = order.executed_price
-            self._update_liquid_price()
+            return loss
 
-        return pnl
+        # Flat or same-side add: update entry price and increase position size.
+        if self.qty == 0 or self.qty * order.qty > 0:
+            self._add_to_position(order)
+            return 0.0
+        else:            
+            closed_qty = min(abs(self.qty), abs(order.qty))
+            direction = 1 if self.qty > 0 else -1
+            # Long earns (exit - entry); short earns (entry - exit). Same formula with sign flip.
+            pnl = direction * (order.executed_price - self.price) * closed_qty
+
+            self.qty += order.qty
+
+            if self.qty == 0:
+                self._reset()
+            else:
+                # If we flipped sides, the new entry price is the executed price.
+                flipped = self.qty * order.qty > 0
+                if flipped:
+                    self.price = order.executed_price
+                self._recalc_liquidation()
+
+            return pnl

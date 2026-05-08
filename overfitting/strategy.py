@@ -2,8 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
-from typing import List, Optional, Union, Dict
-from overfitting.data import Data, MultiCurrency
+from typing import List, Optional, Dict
+from overfitting.data import Data
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
@@ -11,8 +11,8 @@ from overfitting.analysis.report import Report
 from overfitting.slippage import SlippageModel
 
 class Strategy:
-    def __init__(self, 
-                 data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
+    def __init__(self,
+                 data: Dict[str, pd.DataFrame],
                  *,
                  benchmark: Optional[pd.DataFrame] = None,
                  initial_capital: float =100000,
@@ -20,9 +20,9 @@ class Strategy:
                  maint_margin_rate: float =0.005,
                  maint_amount: float=0,
                  slippage_model: Optional[SlippageModel] = None):
-        
+
         self.benchmark = benchmark
-        self.data = MultiCurrency(data) if isinstance(data, dict) else Data(data)
+        self.data = Data(data)
         self.broker = Broker(
             data=self.data, 
             cash=initial_capital, 

@@ -1,6 +1,6 @@
 import pandas as pd
-from typing import List, Dict, Optional, Union, Tuple
-from overfitting.data import Data, MultiCurrency
+from typing import List, Dict, Optional, Tuple
+from overfitting.data import Data
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.slippage import SlippageModel
@@ -9,8 +9,8 @@ from overfitting.errors import EmptyOrderParameters, InvalidOrderParameters, Liq
 
 class Broker:
     def __init__(self,
-                 data: Union[Data, MultiCurrency], 
-                 cash: float, 
+                 data: Data,
+                 cash: float,
                  commission_rate: float, 
                  maint_margin_rate: float, 
                  maint_amount:float,
@@ -45,8 +45,8 @@ class Broker:
                 f"positions={list(self.position.keys())}, "
                 f"trades={len(self.trades)})")
     
-    def _d(self, symbol: str) -> Data:
-        return self.data[symbol] if isinstance(self.data, MultiCurrency) else self.data
+    def _d(self, symbol: str):
+        return self.data[symbol]
 
     def _bars(self, symbol: str, i: int) -> Tuple:
         d = self._d(symbol)

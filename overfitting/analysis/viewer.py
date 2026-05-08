@@ -4,7 +4,6 @@ import numpy as np
 import plotly.graph_objects as go
 
 from overfitting import Strategy
-from overfitting.data import MultiCurrency
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -40,9 +39,7 @@ class StrategyAdapter:
         self._strategy = strategy
 
     def get_symbols(self) -> list[str]:
-        if isinstance(self._strategy.data, MultiCurrency):
-            return list(self._strategy.data.symbols)
-        return ["DEFAULT"]
+        return list(self._strategy.data.symbols)
 
 
 class OHLCBuilder:
@@ -78,10 +75,7 @@ class OHLCBuilder:
     @classmethod
     def from_strategy(cls, strategy, symbol: str) -> pd.DataFrame:
         """Extract a tidy OHLC DataFrame for *symbol* from a strategy instance."""
-        try:
-            d = strategy.data[symbol] if isinstance(strategy.data, MultiCurrency) else strategy.data
-        except KeyError:
-            d = strategy.data
+        d = strategy.data[symbol]
 
         return pd.DataFrame({
             "timestamp": pd.to_datetime(d.timestamp),
@@ -114,7 +108,7 @@ class TradeBuilder:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
 
-        if isinstance(strategy.data, MultiCurrency) and symbol and "symbol" in df.columns:
+        if symbol and "symbol" in df.columns:
             df = df[df["symbol"] == symbol]
 
         for c in cls.COLUMNS:

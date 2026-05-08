@@ -1,120 +1,89 @@
 import pandas as pd
 import numpy as np
+from types import SimpleNamespace
 from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_float_dtype
 from overfitting.errors import InitializationError
 
 REQUIRED_OHLC = ("open", "high", "low", "close")
 
 class Data(dict):
-    
-    open: np.ndarray          # [Required] Open prices 
-    high: np.ndarray          # [Required] High prices
-    low: np.ndarray           # [Required] Low prices
-    close: np.ndarray         # [Required] Close prices
-    timestamp: np.ndarray     # Candle timestamps
-    index: np.ndarray         # Fast datetime64[ns] index
-    columns: tuple[str, ...]  # Available columns
-    n: int                    # Number of rows
-
     """
-    Usage: data.open[i], data.high[i], data.timestamp[i]
+    data = Data({"BTCUSDT": df_btc, "ETHUSDT": df_eth})
+    data["BTCUSDT"].close[i]   # close price of BTC at step i
+    data.index[i]              # the timestamp at step i
+    data.symbols               # ("BTCUSDT", "ETHUSDT")
+    len(data)                  # how many bars there are
     """
-    
-    def __init__(self, df: pd.DataFrame):
-        if not isinstance(df, pd.DataFrame) or df.empty:
-            raise InitializationError("Data must be a non-empty pandas DataFrame.")
-
-        # Validate OHLC
-        missing = [c for c in REQUIRED_OHLC if c not in df.columns]
-        if missing:
-            raise InitializationError(f"Missing required columns: {missing}. Available: {list(df.columns)}")
-
-        # Resolve timestamp: column or index
-        if "timestamp" in df.columns:
-            ts = df["timestamp"]
-        elif isinstance(df.index, pd.DatetimeIndex) or df.index.name == "timestamp":
-            # normalize to a Series so downstream is uniform
-            ts = pd.Series(df.index, index=df.index, name="timestamp")
-        else:
-            raise InitializationError("Provide a 'timestamp' column or use a DatetimeIndex.")
-
-        # Coerce timestamp to datetime64[ns]
-        ts = self._to_datetime_ns(ts)
-
-        payload = {c: df[c].to_numpy() for c in df.columns}
-        payload["timestamp"] = ts.to_numpy()
-
-        super().__init__(payload)
-        object.__setattr__(self, "columns", tuple(sorted(payload.keys(), key=lambda x: (x!='timestamp', x))))
-        object.__setattr__(self, "index", ts.to_numpy())
-        object.__setattr__(self, "n", len(df))
-
-    @staticmethod
-    def _to_datetime_ns(s: pd.Series) -> pd.Series:
-        if is_datetime64_any_dtype(s):
-            dt = pd.to_datetime(s) 
-            # drop tz if present
-            try:
-                dt = dt.tz_localize(None)
-            except Exception:
-                pass
-            return dt
-
-        if is_integer_dtype(s) or is_float_dtype(s):
-            # Heuristic: ms since epoch vs seconds
-            mx = pd.Series(s).max()
-            unit = "ms" if mx > 1e12 else "s"
-            return pd.to_datetime(s, unit=unit)
-
-        # Strings or mixed -> let pandas parse
-        return pd.to_datetime(s, errors="raise")
-
-    def __getattr__(self, key):
-        # attribute-style access for columns
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError( f"'Data' has no field '{key}'. Available: {', '.join(self.columns)}")
-
-    def __len__(self):
-        return self.n
-
-    def __setattr__(self, key, value):
-        # keep the container read-only (avoids accidental mistakes)
-        if key in {"index", "columns", "n"}:
-            object.__setattr__(self, key, value)
-        else:
-            raise AttributeError("Data is read-only; modify the source DataFrame before wrapping.")
-        
-class MultiCurrency(dict):
-
-    symbols: tuple[str, ...]  # List of symbols in this container
-    index: np.ndarray         # datetime64[ns] index
-    n: int                    # Number of rows per symbol
-
     def __init__(self, frames: dict[str, pd.DataFrame]):
         if not isinstance(frames, dict) or not frames:
-            raise InitializationError("Data must be non-empty dict Type - dict[str, pd.DataFrame]")
+            raise InitializationError("Pass a non-empty dict mapping symbol -> DataFrame.")
 
-        payload = {}
-        first_ts = None
-        for symbol, df in frames.items():
-            d = Data(df)
-            if first_ts is None:
-                first_ts = d.index
-            else:
-                # Requires identical timestamps for NOW
-                # TODO IMNPLEMENT AUTO FILL for uniform timestamps
-                if len(d.index) != len(first_ts) or not np.array_equal(d.index, first_ts):
-                    raise InitializationError(
-                        f"Len Timestamps for {symbol} are not equal with the other symbols.")
-                
-            payload[symbol] = d
+        bars = {symbol: _bars_from_frame(df, symbol) for symbol, df in frames.items()}
+        _check_aligned_timelines(bars)
 
-        super().__init__(payload)
-        object.__setattr__(self, "symbols", tuple(payload.keys()))
-        object.__setattr__(self, "index", first_ts)
-        object.__setattr__(self, "n", len(first_ts))
+        super().__init__(bars)
+        self.symbols = tuple(bars)
+        self.index = next(iter(bars.values())).timestamp
 
-        def __len__(self) -> int:
-            return self.n
+    def __len__(self) -> int:
+        return len(self.index)
+
+
+def _bars_from_frame(df: pd.DataFrame, symbol: str) -> SimpleNamespace:
+    """Turn one symbol's DataFrame into a namespace of numpy arrays."""
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise InitializationError(f"'{symbol}': expected a non-empty DataFrame.")
+
+    missing = [c for c in REQUIRED_OHLC if c not in df.columns]
+    if missing:
+        raise InitializationError(
+            f"'{symbol}': missing required columns {missing}. Got: {list(df.columns)}"
+        )
+
+    timestamps = _pull_timestamps(df, symbol)
+
+    arrays = {col: df[col].to_numpy() for col in df.columns}
+    arrays["timestamp"] = timestamps
+    return SimpleNamespace(**arrays)
+
+
+def _pull_timestamps(df: pd.DataFrame, symbol: str) -> np.ndarray:
+    """Find the timestamp series — either a column or the DatetimeIndex — and normalise it."""
+    if "timestamp" in df.columns:
+        ts = df["timestamp"]
+    elif isinstance(df.index, pd.DatetimeIndex) or df.index.name == "timestamp":
+        ts = pd.Series(df.index, name="timestamp")
+    else:
+        raise InitializationError(
+            f"'{symbol}': add a 'timestamp' column or use a DatetimeIndex."
+        )
+    return _to_datetime_ns(ts).to_numpy()
+
+
+def _to_datetime_ns(ts: pd.Series) -> pd.Series:
+    """Coerce whatever the user gave us into tz-naive datetime64[ns]."""
+    if is_datetime64_any_dtype(ts):
+        dt = pd.to_datetime(ts)
+        try:
+            return dt.tz_localize(None)
+        except Exception:
+            return dt
+
+    if is_integer_dtype(ts) or is_float_dtype(ts):
+        # Big numbers look like milliseconds; smaller ones look like seconds.
+        unit = "ms" if pd.Series(ts).max() > 1e12 else "s"
+        return pd.to_datetime(ts, unit=unit)
+
+    return pd.to_datetime(ts, errors="raise")
+
+
+def _check_aligned_timelines(bars: dict[str, SimpleNamespace]) -> None:
+    """All symbols must share the same timeline — for now."""
+    # TODO: auto-fill / reindex so symbols with different timelines can co-exist.
+    iterator = iter(bars.items())
+    _, first = next(iterator)
+    for symbol, b in iterator:
+        if len(b.timestamp) != len(first.timestamp) or not np.array_equal(b.timestamp, first.timestamp):
+            raise InitializationError(
+                f"'{symbol}' timeline doesn't match the other symbols."
+            )

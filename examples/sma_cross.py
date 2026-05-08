@@ -29,8 +29,9 @@ def load_data():
 
     return df, benchamrk_df
 
-backtest_data, benchmark_data = load_data()
-print(backtest_data.head())
+price_df, benchmark_data = load_data()
+backtest_data = {"BTC": price_df}
+print(price_df.head())
 # -
 
 # The Strategy Conditions:
