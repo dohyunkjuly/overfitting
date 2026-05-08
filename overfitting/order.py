@@ -1,23 +1,25 @@
 import uuid
+from decimal import Decimal
 import pandas as pd
 from overfitting.types import OrderType
 
 class Order:
-    def __init__(self, 
-                 time: pd.Timestamp, 
-                 symbol: str, 
-                 qty: float, 
-                 price:float, 
-                 type: OrderType, 
+    def __init__(self,
+                 time: pd.Timestamp,
+                 symbol: str,
+                 qty: float,
+                 price:float,
+                 type: OrderType,
                  stop_price: float = None,
                  label: str= None):
-        
+
         self.id = uuid.uuid4().hex[:16]
         self.created_at = time
         self.executed_at = None
         self.symbol = symbol
-        self.side = "LONG" if qty > 0 else "SHORT"
-        self.qty = qty
+        # Decimal qty so Position bookkeeping is exact
+        self.qty = Decimal(str(qty))
+        self.side = "LONG" if self.qty > 0 else "SHORT"
         self.price = price
         self.type = type
         self.stop_price = stop_price
@@ -50,7 +52,11 @@ class Order:
 
     def to_dict(self):
         return {
-            k: (v.name if isinstance(v, OrderType) else v)
+            k: (
+                v.name if isinstance(v, OrderType)
+                else float(v) if isinstance(v, Decimal)
+                else v
+            )
             for k, v in self.__dict__.items()
         }
 

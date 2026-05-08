@@ -1,4 +1,7 @@
+from decimal import Decimal
 from overfitting.order import Order
+
+ZERO = Decimal("0")
 
 class Position:
     def __init__(self, symbol: str, maint_margin_rate: float = 0.005, maint_amount: float = 0):
@@ -8,7 +11,7 @@ class Position:
         self.leverage = 1
 
         # Open-position state. All zero when flat.
-        self.qty = 0.0
+        self.qty = ZERO
         self.price = 0.0
         self.margin = 0.0
         self.liquid_price = 0.0
@@ -30,15 +33,18 @@ class Position:
         """
         size = abs(self.qty)
         if size == 0:
-            # Flat — no margin tied up and no liquidation price to track.
+            # Flat — no margin and no liquidation price to track.
             self.margin = 0.0
             self.liquid_price = 0.0
             return
 
+        # qty is Decimal; cast to float for the price-side math.
+        size_f = float(size)
+
         # Isolated-margin model.
         # initial_margin: what we lock up to open the position at this leverage.
         # maint_margin:   cushion the exchange requires before forcing liquidation.
-        notional = self.price * size
+        notional = self.price * size_f
         initial_margin = notional / self.leverage
         maint_margin = max(0.0, notional * self.maint_margin_rate - self.maint_amount)
 
@@ -47,17 +53,20 @@ class Position:
         # How far the price can move against us before we get liquidated.
         # Long: liquidates when price drops by `offset`.
         # Short: liquidates when price rises by `offset`.
-        offset = (initial_margin - maint_margin) / size
+        offset = (initial_margin - maint_margin) / size_f
         self.liquid_price = self.price - offset if self.qty > 0 else self.price + offset
 
     def _add_to_position(self, order: Order) -> None:
         new_qty = self.qty + order.qty
-        self.price = (self.price * self.qty + order.executed_price * order.qty) / new_qty
+        # Weighted-average entry price
+        self.price = (
+            self.price * float(self.qty) + order.executed_price * float(order.qty)
+        ) / float(new_qty)
         self.qty = new_qty
         self._recalc_liquidation()
 
     def _reset(self) -> None:
-        self.qty = 0.0
+        self.qty = ZERO
         self.price = 0.0
         self.margin = 0.0
         self.liquid_price = 0.0
@@ -87,8 +96,8 @@ class Position:
         else:            
             closed_qty = min(abs(self.qty), abs(order.qty))
             direction = 1 if self.qty > 0 else -1
-            # Long earns (exit - entry); short earns (entry - exit). Same formula with sign flip.
-            pnl = direction * (order.executed_price - self.price) * closed_qty
+            # Long earns (exit - entry) and short earns (entry - exit). Same formula with sign flip.
+            pnl = direction * (order.executed_price - self.price) * float(closed_qty)
 
             self.qty += order.qty
 

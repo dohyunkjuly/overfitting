@@ -1,4 +1,5 @@
 import pandas as pd
+from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
 from overfitting.data import Data
 from overfitting.order import Order
@@ -82,8 +83,8 @@ class Broker:
         if not symbol or not isinstance(symbol, str):
             raise InvalidOrderParameters(f"symbol must be a non-empty string. - {symbol}")
         
-        if not qty or not isinstance(qty, (int, float)):
-            raise InvalidOrderParameters(f"qty must be a non-empty float. - {qty}")
+        if not qty or not isinstance(qty, (int, float, Decimal)):
+            raise InvalidOrderParameters(f"qty must be a non-empty number. - {qty}")
 
         if symbol not in self.position:
             self.position[symbol] = Position(symbol, self.maint_margin_rate, self.maint_amount)
@@ -182,7 +183,7 @@ class Broker:
         
         position = self.position[symbol]
 
-        notional = abs(order.qty) * order.executed_price
+        notional = float(abs(order.qty)) * order.executed_price
         commission = notional * self.commission_rate
         pnl = position.process_trade(order, liquidation)
         executed_time = pd.to_datetime(self.data.index[self._i])
