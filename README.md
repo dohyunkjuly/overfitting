@@ -6,15 +6,13 @@ Overfitting simulates a realistic crypto futures trading environment including
 - Four Different Order Types: LIMIT, MARKET, STOP_LIMIT, STOP_MARKET
 - Slippage/Commission Setting
 
-![Backtest Viewer](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/viewer.gif)
-
 ## Installation
     $ pip install overfitting
 
 ## Usage
 ```python
 import pandas as pd
-from overfitting import Strategy, BacktestViewer
+from overfitting import Strategy
 from overfitting.indicators import SMA
 
 def load_data():
@@ -74,9 +72,6 @@ strategy = MyStrategy(
 )
 returns = strategy.run()
 strategy.plot(returns)
-
-# Show Backtest Viewer UI
-# BacktestViewer(strategy).show()
 ```
 
 Results
