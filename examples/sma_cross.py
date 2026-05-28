@@ -51,8 +51,8 @@ class MyStrategy(Strategy):
         self.asset = 'BTC'
         self.set_leverage(self.asset, 1)
 
-        self.sma_short = SMA(self, self.asset, source="close", window=20)
-        self.sma_long = SMA(self, self.asset, source="close", window=50)
+        self.sma_short = self.indicator(SMA, self.asset, window=20)
+        self.sma_long = self.indicator(SMA, self.asset, window=50)
 
     def next(self, i):
         if i == 0:

@@ -1,14 +1,18 @@
+import inspect
 import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Type
 from overfitting.data import Data
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.analysis.report import Report
 from overfitting.slippage import SlippageModel
+from overfitting.indicators import Indicator
+
+_OHLCV_NAMES = ("open", "high", "low", "close", "volume")
 
 class Strategy:
     def __init__(self,
@@ -123,17 +127,59 @@ class Strategy:
         """
         return dict(self.broker.open_orders.get(symbol, {}))
 
-    def open(self, symbol: str, i: int):
-        return self.broker._open(symbol, i)
-    
-    def high(self, symbol: str, i: int):
-        return self.broker._high(symbol, i)
-    
-    def low(self, symbol: str, i: int):
-        return self.broker._low(symbol, i)
-    
-    def close(self, symbol: str, i: int):
-        return self.broker._close(symbol, i)
+    def open(self, symbol: str, i: Optional[int] = None):
+        return self._ohlcv(symbol, "open", i)
+
+    def high(self, symbol: str, i: Optional[int] = None):
+        return self._ohlcv(symbol, "high", i)
+
+    def low(self, symbol: str, i: Optional[int] = None):
+        return self._ohlcv(symbol, "low", i)
+
+    def close(self, symbol: str, i: Optional[int] = None):
+        return self._ohlcv(symbol, "close", i)
+
+    def _ohlcv(self, symbol: str, name: str, i: Optional[int]):
+        """Scalar at bar ``i`` when ``i`` is given; otherwise the full pandas Series."""
+        arr = getattr(self.broker._d(symbol), name)
+        if i is None:
+            return pd.Series(arr, name=name)
+        return arr[i]
+
+    def indicator(self, cls: Type[Indicator], symbol: str, *, source: str = "close", **kwargs) -> Indicator:
+        """
+        Build an indicator by binding the symbol's OHLCV series to ``cls``'s constructor.
+
+        - Constructor params named one of ``open / high / low / close / volume``
+          are filled with the matching series for ``symbol``.
+        - A param named ``series`` is filled with the ``source`` column
+          (default ``"close"``; override per-call with ``source=`` ).
+        - Any other kwargs are forwarded as-is.
+        """
+        sig = inspect.signature(cls.__init__)
+        bound = {}
+
+        for name, param in sig.parameters.items():
+            if name == "self":
+                continue
+            if name in _OHLCV_NAMES:
+                bound[name] = self._ohlcv(symbol, name, None)
+            elif name == "series":
+                if source not in _OHLCV_NAMES:
+                    raise ValueError(
+                        f"source={source!r} must be one of {_OHLCV_NAMES}"
+                    )
+                bound[name] = self._ohlcv(symbol, source, None)
+            elif name in kwargs:
+                bound[name] = kwargs.pop(name)
+            # else: rely on the indicator's default
+
+        if kwargs:
+            raise TypeError(
+                f"{cls.__name__}: unexpected keyword arguments {list(kwargs)}"
+            )
+
+        return cls(**bound)
 
     def bars(self, symbol: str, i: int) -> tuple:
         """

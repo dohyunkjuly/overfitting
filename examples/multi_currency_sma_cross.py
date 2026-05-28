@@ -48,15 +48,13 @@ class MyStrategy(Strategy):
     def init(self):
         self.universe = list(self.data.symbols)
 
-        for asset in self.universe:
-            self.set_leverage(asset, 1)
-
         self.sma_short = {}
         self.sma_long = {}
 
         for asset in self.universe:
-            self.sma_short[asset] = SMA(self, asset, source="close", window=20)
-            self.sma_long[asset] = SMA(self, asset, source="close", window=50)
+            self.set_leverage(asset, 1)
+            self.sma_short[asset] = self.indicator(SMA, asset, window=20)
+            self.sma_long[asset] = self.indicator(SMA, asset, window=50)
 
     def next(self, i):
         if i == 0:
