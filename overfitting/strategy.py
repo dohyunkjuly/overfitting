@@ -9,8 +9,9 @@ from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.analysis.report import Report
-from overfitting.slippage import SlippageModel
-from overfitting.indicators import Indicator
+import warnings
+from types import SimpleNamespace
+from overfitting.indicators import Indicator, Line, Lines
 
 _OHLCV_NAMES = ("open", "high", "low", "close", "volume")
 
@@ -23,7 +24,19 @@ class Strategy:
                  commission_rate: float =0.0002,
                  maint_margin_rate: float =0.005,
                  maint_amount: float=0,
-                 slippage_model: Optional[SlippageModel] = None):
+                 slippage=None,
+                 slippage_model=None):
+        """
+        data: {symbol: DataFrame with open, high, low, close}.
+        slippage: a number (0.001 means every fill is 0.1% worse), a function
+            `(order, bar) -> executed price`, or None. See overfitting.slippage.
+        slippage_model: deprecated name for `slippage`.
+        """
+        if slippage_model is not None:
+            warnings.warn("slippage_model= is deprecated, use slippage=.", DeprecationWarning,
+                          stacklevel=2)
+            if slippage is None:
+                slippage = slippage_model
 
         self.benchmark = benchmark
         self.data = Data(data)
@@ -33,12 +46,17 @@ class Strategy:
             commission_rate=commission_rate,
             maint_margin_rate=maint_margin_rate,
             maint_amount=maint_amount,
-            slippage_model=slippage_model
+            slippage=slippage,
         )
         self.balances = []           # the curve returns are computed from
         self.equity_curve = []       # cash + unrealized PnL at each bar's close
         self.realized_balances = []  # cash only; moves when trades close
         self.returns= []
+        # Position in the data. Bars before `i` have completed; bar `i` is the
+        # one orders placed now will trade on.
+        self._cursor = SimpleNamespace(i=0)
+        # next() may be written as next(self) or next(self, i).
+        self._next_takes_index = len(inspect.signature(self.next).parameters) >= 1
         self.init()
 
     def __repr__(self):
@@ -55,13 +73,73 @@ class Strategy:
         """
     
     @abstractmethod
-    def next(self, i):
+    def next(self):
         """
-        It defines the logic of the strategy that will be executed on each step 
-        (i.e., for each time period in the dataset). The parameter `i` represents 
-        the index of the current time period. This method is called in a loop 
-        within the `run` method.
+        The strategy's logic, called once per bar before that bar trades.
+
+        Write it as `next(self)` and read indicators relative to the current
+        bar (`self.fast[-1]` is the last completed bar), or as `next(self, i)`
+        to receive the bar's index. Orders placed here fill on the current bar:
+        a market order fills at its open.
         """
+
+    @property
+    def i(self) -> int:
+        """Index of the current bar. Bars before it have completed."""
+        return self._cursor.i
+
+    def price(self, symbol: str) -> float:
+        """The open of the current bar: the price a market order placed now fills at."""
+        return self.broker._open(symbol, self._cursor.i)
+
+    def I(self, source, *args, **kwargs):
+        """
+        Declare an indicator, usually in init().
+
+            self.fast = self.I(sma, close, 20)             # a function and its arguments
+            self.bands = self.I(bollinger, close, 20, 2)   # several outputs
+            self.closes = self.I(close)                    # a raw series
+
+        `source` is a function that returns a series, a DataFrame or a tuple of
+        series as long as the data, or such values directly. Price arrays from
+        `self.data[symbol]` are handed to the function as pandas Series, and
+        other indicators (`Line`) as their full series, so indicators can be
+        built on each other.
+
+        Returns a `Line` (or `Lines` for several outputs), read inside next()
+        relative to the current bar: `line[-1]` is the last completed bar.
+        """
+        n = len(self.data)
+
+        def as_input(value):
+            if isinstance(value, Line):
+                return value.values
+            if isinstance(value, np.ndarray) and value.ndim == 1 and len(value) == n:
+                return pd.Series(value)
+            if isinstance(value, pd.Series) and len(value) == n:
+                return value.reset_index(drop=True)
+            return value
+
+        if callable(source):
+            name = getattr(source, "__name__", None)
+            result = source(*[as_input(a) for a in args],
+                            **{k: as_input(v) for k, v in kwargs.items()})
+        else:
+            if args or kwargs:
+                raise TypeError("Arguments are only accepted together with an indicator function.")
+            name, result = None, source
+
+        def check(values):
+            if len(values) != n:
+                raise ValueError(
+                    f"Indicator returned {len(values)} values for {n} bars; it must return one per bar.")
+            return values
+
+        if isinstance(result, pd.DataFrame):
+            return Lines(check(result).reset_index(drop=True), self._cursor)
+        if isinstance(result, (tuple, list)) and result and np.ndim(result[0]) == 1:
+            return tuple(Line(check(values), self._cursor) for values in result)
+        return Line(check(np.asarray(result, dtype=float)), self._cursor, name)
 
     def limit_order(self, symbol: str, qty: float, price: float, label: Optional[str] = None) -> Order:
         return self.broker.order(symbol, qty, price, type="LIMIT", label=label)
@@ -162,6 +240,9 @@ class Strategy:
 
     def indicator(self, cls: Type[Indicator], symbol: str, *, source: str = "close", **kwargs) -> Indicator:
         """
+        Deprecated: use `self.I(function, series, ...)` with the functions in
+        overfitting.indicators.
+
         Build an indicator by binding the symbol's OHLCV series to ``cls``'s constructor.
 
         - Constructor params named one of ``open / high / low / close / volume``
@@ -170,6 +251,8 @@ class Strategy:
           (default ``"close"``; override per-call with ``source=`` ).
         - Any other kwargs are forwarded as-is.
         """
+        warnings.warn("Strategy.indicator() is deprecated, use Strategy.I().", DeprecationWarning,
+                      stacklevel=2)
         sig = inspect.signature(cls.__init__)
         bound = {}
 
@@ -237,7 +320,11 @@ class Strategy:
         b = equity if mark_to_market else realized
 
         for i in range(len(t)):
-            self.next(i)
+            self._cursor.i = i
+            if self._next_takes_index:
+                self.next(i)
+            else:
+                self.next()
             self.broker.next()
 
             # Update Balance
@@ -266,19 +353,26 @@ class Strategy:
         returns : pd.Series
             A series of periodic strategy returns indexed by datetime.
         save_path : str, optional
-            The directory path where plots and visual outputs will be saved.
-            If None, plots will only be shown but not saved.
+            Directory where each chart shown is also saved as a PNG file.
+            If None, the charts are only shown.
+        title : str
+            The strategy's name on the charts and the report.
         """
         trades_list = self.broker.trades
         captial = self.broker.initial_capital
 
         p = Report(
-            returns_series=returns, 
-            trades_list=trades_list, 
-            initial_capital=captial, 
+            returns_series=returns,
+            trades_list=trades_list,
+            initial_capital=captial,
             benchmark=self.benchmark,
             save_path=save_path,
-            title_prefix=title
+            title_prefix=title,
+            round_trips=self.fetch_round_trips(),
+            orders=self.fetch_orders(),
+            funding=self.fetch_funding(),
+            account_history=self.fetch_account_history(),
+            position_history={s: self.fetch_position_history(s) for s in self.data.symbols},
         )
         p.show()
 
@@ -291,6 +385,42 @@ class Strategy:
         """
         return pd.DataFrame(self.broker.trades)
     
+    def fetch_round_trips(self) -> pd.DataFrame:
+        """
+        Returns completed trades, one row each: from opening a position until
+        it is flat again or flips to the other side.
+
+        Columns include entry and exit time and price, holding time, gross PnL,
+        commission, funding, net PnL, return on the entry notional, and `mae`
+        and `mfe`: the furthest the price moved against and in favour of the
+        position while it was open, as a fraction of the entry price.
+
+        A position still open at the end of the backtest is not included.
+        """
+        return self.broker.recorder.round_trips_frame()
+
+    def fetch_orders(self) -> pd.DataFrame:
+        """
+        Returns every order placed, one row each, with its `status`:
+        OPEN, FILLED, CANCELLED or REJECTED.
+        """
+        return pd.DataFrame([order.to_dict() for order in self.broker.orders])
+
+    def fetch_account_history(self) -> pd.DataFrame:
+        """
+        Returns the account at the close of every bar: cash, equity, margin in
+        use, gross exposure (long plus short), net exposure (long minus short)
+        and leverage (gross exposure over equity).
+        """
+        return self.broker.recorder.account_history()
+
+    def fetch_position_history(self, symbol: str) -> pd.DataFrame:
+        """
+        Returns one symbol's position at the close of every bar: size, entry
+        price, close, exposure, margin, liquidation price and unrealized PnL.
+        """
+        return self.broker.recorder.position_history(symbol)
+
     def fetch_funding(self) -> pd.DataFrame:
         """
         Returns the funding payments as a pandas DataFrame, one row per payment.

@@ -14,7 +14,7 @@
 import pandas as pd
 from typing import Dict
 from overfitting import Strategy
-from overfitting.indicators import SMA
+from overfitting.indicators import sma, crossover, crossunder
 
 # Constants
 DATA_PATHS={
@@ -48,42 +48,30 @@ class MyStrategy(Strategy):
     def init(self):
         self.universe = list(self.data.symbols)
 
-        self.sma_short = {}
-        self.sma_long = {}
+        self.fast = {}
+        self.slow = {}
 
         for asset in self.universe:
             self.set_leverage(asset, 1)
-            self.sma_short[asset] = self.indicator(SMA, asset, window=20)
-            self.sma_long[asset] = self.indicator(SMA, asset, window=50)
+            close = self.data[asset].close
+            self.fast[asset] = self.I(sma, close, 20)
+            self.slow[asset] = self.I(sma, close, 50)
 
-    def next(self, i):
-        if i == 0:
-            return
-
+    def next(self):
         for asset in self.universe:
-            sma_short = self.sma_short[asset][i]
-            sma_long = self.sma_long[asset][i]
-            previous_sma_short = self.sma_short[asset][i - 1]
-            previous_sma_long = self.sma_long[asset][i - 1]
-
-            if (
-                pd.isna(sma_short) or pd.isna(sma_long) or
-                pd.isna(previous_sma_short) or pd.isna(previous_sma_long)
-            ):
-                continue
-
+            fast, slow = self.fast[asset], self.slow[asset]
             position = self.get_position(asset)
 
             # Golden cross (entry)
-            if previous_sma_short <= previous_sma_long and sma_short > sma_long and position.qty == 0:
-                open_price = self.open(asset, i)
-                lot_size = (self.get_balance() / 2) // open_price
+            if crossover(fast, slow) and position.qty == 0:
+                price = self.price(asset)
+                lot_size = (self.get_balance() / 2) // price
 
                 if lot_size > 0:
-                    self.limit_order(asset, lot_size, open_price)
+                    self.limit_order(asset, lot_size, price)
 
             # Death cross (exit)
-            if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
+            elif crossunder(fast, slow) and position.qty > 0:
                 self.market_order(asset, -position.qty)
 
 # Run the strategy and plot the results.

@@ -17,7 +17,7 @@ Run from the repository root; the example reads the sample data in `examples/dat
 ```python
 import pandas as pd
 from overfitting import Strategy
-from overfitting.indicators import SMA
+from overfitting.indicators import sma, crossover, crossunder
 
 def load_data():
     df = pd.read_csv('examples/data/BTCUSDT.csv')
@@ -35,34 +35,21 @@ class MyStrategy(Strategy):
         self.asset = 'BTC'
         self.set_leverage(self.asset, 1)
 
-        self.sma_short = self.indicator(SMA, self.asset, window=20)
-        self.sma_long = self.indicator(SMA, self.asset, window=50)
+        close = self.data[self.asset].close
+        self.fast = self.I(sma, close, 20)
+        self.slow = self.I(sma, close, 50)
 
-    def next(self, i):
-        if i == 0:
-            return
-
-        sma_short = self.sma_short[i]
-        sma_long = self.sma_long[i]
-        previous_sma_short = self.sma_short[i - 1]
-        previous_sma_long = self.sma_long[i - 1]
-
-        if (
-            pd.isna(sma_short) or pd.isna(sma_long) or
-            pd.isna(previous_sma_short) or pd.isna(previous_sma_long)
-        ):
-            return
-
+    def next(self):
         position = self.get_position(self.asset)
 
         # Golden cross (entry)
-        if previous_sma_short <= previous_sma_long and sma_short > sma_long and position.qty == 0:
-            open_price = self.open(self.asset, i)
-            lot_size = self.get_balance() // open_price
-            self.limit_order(self.asset, lot_size, open_price)
+        if crossover(self.fast, self.slow) and position.qty == 0:
+            price = self.price(self.asset)
+            lot_size = self.get_balance() // price
+            self.limit_order(self.asset, lot_size, price)
 
         # Death cross (exit)
-        if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
+        elif crossunder(self.fast, self.slow) and position.qty > 0:
             self.market_order(self.asset, -position.qty)
 
 price_df, benchmark_data = load_data()
@@ -82,48 +69,298 @@ Results
 -------
 ```text
 Performance Summary
-Number of Years               1.66000000
-Start Date           2023-01-01 00:00:00
-End Date             2024-08-29 00:00:00
-Initial Balance         100,000.00000000
-Final Balance           205,328.91120000
-CAGR                          0.54238181
-Cumulative Return             2.05328911
-Sharpe Ratio                  1.47036287
-Sortino Ratio                 2.79869052
-Max Drawdown                 -0.26533797
-Daily Value At Risk          -0.03329469
-Skew                          0.72604283
-Kurtosis                      2.82598628
-Total Trades                182.00000000
-Winning Trades               69.00000000
-Losing Trades               113.00000000
-Win Rate (%)                 37.91208791
-Gross Profit            399,044.19246000
-Gross Loss             -293,715.28126000
-Net Profit              105,328.91120000
-Avg Return (%)                0.38834383
-Avg Profit (%)                3.54140613
-Avg Loss (%)                 -1.53697740
-  Net drawdown in %  Peak date Valley date Recovery date Duration
-0         26.533797 2024-03-13  2024-06-28           NaT      NaN
-1         20.996185 2023-03-17  2023-09-12    2023-10-23      157
-2          7.051091 2023-12-05  2024-01-22    2024-02-09       49
-3          5.980692 2023-01-21  2023-02-13    2023-02-15       18
-4          5.578214 2023-02-15  2023-03-07    2023-03-12       18
-5          5.550106 2024-03-04  2024-03-06    2024-03-11        6
-6          4.538401 2023-11-10  2023-11-16    2023-12-04       17
-7          2.530832 2023-11-01  2023-11-03    2023-11-09        7
-8          2.162228 2024-02-18  2024-02-23    2024-02-27        7
-9          1.603446 2024-02-28  2024-02-29    2024-03-04        4
+
+Overview
+  Start Date                                   2023-01-01 00:00
+  End Date                                     2024-08-29 00:00
+  Number of Years                                         1.663
+  Initial Balance                                    100,000.00
+  Final Balance                                      205,328.91
+  Total Return                                          105.33%
+  CAGR                                                   54.13%
+
+Returns
+  Annualized Mean Return                                 48.64%
+  Best Day                                               10.08%
+  Worst Day                                              -5.38%
+  Best Month                                             27.88%
+  Worst Month                                           -13.71%
+  Positive Days                                          34.93%
+  Positive Months                                        70.00%
+  Average Up Day                                          1.59%
+  Average Down Day                                       -0.95%
+  Longest Winning Streak (days)                               7
+  Longest Losing Streak (days)                                7
+
+Risk
+  Volatility (annualized)                                33.08%
+  Downside Deviation (annualized)                        17.38%
+  Sharpe Ratio                                            1.470
+  Sortino Ratio                                           2.799
+  Calmar Ratio                                            2.040
+  Omega Ratio                                             1.316
+  Gain to Pain Ratio                                      0.316
+  Tail Ratio                                              1.569
+  Common Sense Ratio                                      2.064
+  Daily Value at Risk (95%)                              -2.19%
+  Daily Value at Risk (99%)                              -3.74%
+  Daily Expected Shortfall (95%)                         -3.16%
+  Daily Expected Shortfall (99%)                         -4.17%
+  Skew (daily)                                            1.804
+  Excess Kurtosis (daily)                                 7.538
+  Autocorrelation (1 day)                                 0.075
+  Kelly Fraction                                          4.445
+
+Drawdown
+  Max Drawdown                                          -26.53%
+  Current Drawdown                                      -20.56%
+  Average Drawdown                                       -4.91%
+  Longest Drawdown (days)                                   219
+  Average Drawdown Duration (days)                       31.500
+  Average Recovery Time (days)                            6.765
+  Time Underwater                                        93.41%
+  Ulcer Index                                            12.12%
+  Pain Index                                              9.74%
+  Recovery Factor                                         3.970
+  Martin Ratio                                            4.465
+  Drawdowns Deeper Than 5%                                    6
+  Drawdowns Deeper Than 10%                                   2
+  Drawdowns Deeper Than 20%                                   2
+
+Sharpe Ratio Reliability
+  Sharpe Standard Error                                   0.726
+  Sharpe 95% Range (low)                                  0.047
+  Sharpe 95% Range (high)                                 2.894
+  Probability Sharpe Above 0                             97.86%
+  Days Needed To Confirm Sharpe                             401
+
+Benchmark
+  Alpha (annualized)                                      3.44%
+  Beta                                                    0.509
+  Correlation                                             0.758
+  R-Squared                                               0.574
+  Tracking Error (annualized)                            32.39%
+  Information Ratio                                      -1.238
+  Excess Return (annualized)                            -61.21%
+  Up Capture                                              0.493
+  Down Capture                                            0.479
+  Days Beating Benchmark                                 43.00%
+
+Trades
+  Total Trades                                              182
+  Long Trades                                               182
+  Short Trades                                                0
+  Win Rate                                               37.36%
+  Win Rate (long)                                        37.36%
+  Win Rate (short)                                          n/a
+  Average Win                                          5,837.17
+  Average Loss                                        -2,557.89
+  Largest Win                                         27,402.74
+  Largest Loss                                       -10,211.93
+  Payoff Ratio                                            2.282
+  Profit Factor                                           1.361
+  Expectancy per Trade                                   578.73
+  Average Trade Return                                    0.52%
+  Average Winning Return                                  3.94%
+  Average Losing Return                                  -1.52%
+  Expectancy (R)                                          0.226
+  System Quality Number                                   1.220
+  Average Holding Time (bars)                            43.352
+  Median Holding Time (bars)                             33.000
+  Longest Holding Time (bars)                               282
+  Average Holding Time, Winners (bars)                   73.294
+  Average Holding Time, Losers (bars)                    25.491
+  Longest Winning Streak (trades)                             7
+  Longest Losing Streak (trades)                              8
+  Trades per Month                                        9.233
+  Profit From Best Trade                                 26.02%
+  Profit From Best 5 Trades                             119.77%
+  Net Profit Without Best 5 Trades                   -20,822.32
+  Gross Profit                                       396,927.83
+  Gross Loss                                        -291,598.92
+  Net Profit                                         105,328.91
+
+Trade Quality
+  Average Adverse Excursion                              -1.85%
+  Average Favourable Excursion                            3.08%
+  Edge Ratio                                              1.665
+  Profit Captured                                        18.08%
+  Average Profit Given Back                               2.52%
+  Liquidations                                                0
+
+Costs
+  Total Commission                                    11,407.29
+  Total Slippage                                           0.00
+  Funding Paid                                             0.00
+  Funding Received                                         0.00
+  Total Costs                                         11,407.29
+  Profit Before Costs                                116,736.20
+  Costs as Share of Profit Before Costs                   9.77%
+  Average Cost per Fill                                   31.34
+  Break-Even Commission Multiple                         10.233
+  Traded Value                                    57,036,444.00
+  Turnover (times equity per year)                      196.244
+
+Exposure and Margin
+  Time in Market                                         54.25%
+  Average Leverage                                        0.491
+  Average Leverage in Market                              0.906
+  Maximum Leverage                                        0.991
+  Average Net Exposure                                   49.14%
+  Average Margin Usage                                   48.02%
+  Peak Margin Usage                                     102.54%
+  Closest Distance to Liquidation                        99.50%
+  Average Distance to Liquidation                        99.54%
+  Liquidation Loss                                         0.00
+
+Orders
+  Orders Placed                                             364
+  Orders Filled                                             364
+  Orders Cancelled                                            0
+  Orders Rejected                                             0
+  Orders Still Open                                           0
+  Fill Rate                                             100.00%
+  Average Slippage per Fill                               0.00%
+
+By Symbol
+       Trades Win rate     Net PnL Average PnL Profit factor Share of profit Time held
+Symbol                                                                                
+BTC       182    37.4%  105,328.91      578.73          1.36          100.0%     54.2%
+
+Worst Drawdowns
+   Net drawdown in %  Peak date Valley date Recovery date  Duration (days)
+0          26.533797 2024-03-13  2024-06-28           NaT              169
+1          20.996185 2023-03-17  2023-09-12    2023-10-23              219
+2           7.051091 2023-12-05  2024-01-22    2024-02-09               65
+3           5.980692 2023-01-21  2023-02-13    2023-02-15               24
+4           5.578214 2023-02-15  2023-03-07    2023-03-12               24
+5           5.550106 2024-03-04  2024-03-06    2024-03-11                6
+6           4.538401 2023-11-10  2023-11-16    2023-12-04               23
+7           2.530832 2023-11-01  2023-11-03    2023-11-09                7
+8           2.162228 2024-02-18  2024-02-23    2024-02-27                8
+9           1.603446 2024-02-28  2024-02-29    2024-03-04                4
 ```
 
-## Performance Visualizations Examples
+## Indicators
 
-![Cumulative Returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/culmulative_returns.png)
-![Daily Drawdowns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/daily_drawdowns.png)
-![Monthly Heat Maps](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_heat_maps.png)
-![Rolling Sharpe Ratio](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_sharpe_ratio.png)
+An indicator is a plain function that takes price series and returns one value per bar. Declare it in `init()` with `self.I`, then read it in `next()` relative to the current bar:
+
+```python
+from overfitting.indicators import sma, rsi, bollinger, crossover
+
+def init(self):
+    bars = self.data["BTC"]
+    self.fast = self.I(sma, bars.close, 20)
+    self.rsi = self.I(rsi, bars.close, 14)
+    self.bands = self.I(bollinger, bars.close, 20, 2)    # several outputs
+
+def next(self):
+    self.fast[-1]            # value at the last completed bar
+    self.fast[-2]            # the bar before
+    self.bands.upper[-1]     # one output of a multi-output indicator
+    crossover(self.rsi, 30)  # True when RSI just moved above 30
+```
+
+- Inside `next()`, an indicator only shows bars that have finished. The bar being traded and later bars cannot be read, so there is no look-ahead to guard against.
+- Before there is enough history the value is `NaN`, and `crossover` / `crossunder` return `False`.
+- `self.price("BTC")` is the open of the current bar, the price a market order placed now fills at.
+- Built in: `sma`, `ema`, `wma`, `rsi`, `macd`, `stochastic`, `bollinger`, `atr`, `donchian`.
+- A custom indicator is any function of the same shape; see `examples/donchian_breakout.py`.
+
+`next(self, i)` with the bar index is still supported. The class-based indicators (`SMA`, `EMA`, ...) and `self.indicator(...)` still work but are deprecated.
+
+## Slippage
+
+```python
+MyStrategy(data, slippage=0.001)             # every fill is 0.1% worse than the order price
+
+from overfitting.slippage import skewed
+MyStrategy(data, slippage=skewed(0.15))      # slips 15% of the way from the open to the bar's extreme
+
+MyStrategy(data, slippage=lambda order, bar: order.theoretical_price + 0.5)   # your own model
+```
+
+A slippage model is a function `(order, bar) -> executed price`. `order.qty` is positive for a buy, and `bar` has `open`, `high`, `low` and `close`. `slippage_model=` and `Slippage.FixedPercent(f=...)` still work but are deprecated.
+
+## Report and Charts
+
+The summary has eleven sections: overview, returns, risk, drawdown, Sharpe ratio reliability, benchmark, trades, trade quality, costs, exposure and margin, and orders, followed by a per-symbol table and the worst drawdowns.
+
+`strategy.plot(returns)` prints the summary above and shows 13 charts, one after another.
+
+- In a Jupyter or VS Code notebook the charts appear inline.
+- In a script each opens in a matplotlib window.
+
+```python
+strategy.plot(returns)                         # print the summary and show the charts
+strategy.plot(returns, save_path="results")    # also save each chart as a PNG in results/
+strategy.plot(returns, title="SMA cross")      # name used on the charts
+```
+
+| Chart | Function in `overfitting.analysis.plots` | Needs |
+|---|---|---|
+| Cumulative returns | `cumulative_returns` | |
+| Cumulative returns, log scale | `cumulative_returns_log` | |
+| Monthly returns heatmap | `monthly_heatmap` | |
+| Yearly returns | `yearly_returns` | |
+| Distribution of monthly returns | `monthly_distribution` | |
+| Return quantiles (box plot of daily, weekly, monthly returns) | `return_quantiles` | |
+| Rolling Sharpe | `rolling_sharpe` | |
+| Rolling volatility | `rolling_volatility` | |
+| Drawdown | `drawdown` | |
+| Rolling beta | `rolling_beta` | a benchmark |
+| Profit per trade | `profit_per_trade` | |
+| Cost breakdown | `cost_breakdown` | |
+| Distance to liquidation | `liquidation_distance` | |
+
+Rolling beta is skipped when no benchmark is given. Each chart is also available on its own, and every number behind them is in `overfitting.analysis.metrics`:
+
+```python
+from overfitting.analysis import metrics, plots
+
+daily = metrics.aggregate_returns(returns, "D")
+plots.drawdown(daily).savefig("drawdown.png")
+plots.profit_per_trade(strategy.fetch_round_trips())
+metrics.summary(daily)       # 49 metrics as a pandas Series
+
+metrics.trade_summary(strategy.fetch_round_trips())   # win rate, expectancy, streaks ...
+metrics.by_symbol(strategy.fetch_round_trips())       # results per symbol
+metrics.by_weekday(strategy.fetch_round_trips())      # results by entry weekday
+```
+
+The 13 charts, from the example above:
+
+![Cumulative returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns.png)
+![Cumulative returns, log scale](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns_log.png)
+![Monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_heatmap.png)
+![Yearly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/yearly_returns.png)
+![Distribution of monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_distribution.png)
+![Return quantiles](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/return_quantiles.png)
+![Rolling Sharpe ratio](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_sharpe.png)
+![Rolling volatility](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_volatility.png)
+![Drawdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/drawdown.png)
+![Rolling beta](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_beta.png)
+![Profit per trade](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/profit_per_trade.png)
+![Cost breakdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cost_breakdown.png)
+![Distance to liquidation](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/liquidation_distance.png)
+
+## Trade and Account Data
+
+After `strategy.run()`, everything that happened is available as pandas DataFrames:
+
+```python
+strategy.fetch_round_trips()            # one row per completed trade
+strategy.fetch_trades()                 # one row per fill
+strategy.fetch_orders()                 # every order placed, with its status
+strategy.fetch_account_history()        # the account on every bar
+strategy.fetch_position_history("BTC")  # one symbol's position on every bar
+strategy.fetch_funding()                # funding payments
+```
+
+- **Round trips** run from opening a position until it is flat again or flips sides. Each row has entry and exit time and price, holding time, gross PnL, commission, funding, net PnL, and `mae` / `mfe`: how far the price moved against and in favour of the position while it was open, as a fraction of the entry price.
+- **Orders** carry a `status` of `OPEN`, `FILLED`, `CANCELLED` or `REJECTED`, a `reject_reason` when rejected, and the `slippage` cost of each fill.
+- **Account history** has cash, equity, margin in use, gross and net exposure, and leverage.
+- **Position history** has size, entry price, close, exposure, margin, liquidation price and unrealized PnL.
 
 ## Liquidation Handling
 

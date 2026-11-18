@@ -184,9 +184,7 @@ def test_all_in_order_is_not_rejected_by_rounding():
 
 
 def test_slippage_alone_does_not_reject_an_all_in_order():
-    from overfitting import Slippage
-
-    broker = make_broker([FLAT], cash=1_000, slippage_model=Slippage.FixedPercent(f=0.01))
+    broker = make_broker([FLAT], cash=1_000, slippage=0.01)
     market(broker, 10)  # affordable at 100, fills at 101
 
     assert broker.get_position(SYMBOL).qty == Decimal("10")
@@ -194,10 +192,8 @@ def test_slippage_alone_does_not_reject_an_all_in_order():
 
 
 def test_closing_is_allowed_even_when_available_margin_is_negative():
-    from overfitting import Slippage
-
     # All-in at 100 fills at 101, so the locked margin (1,010) exceeds cash (1,000).
-    broker = make_broker([FLAT, FLAT], cash=1_000, slippage_model=Slippage.FixedPercent(f=0.01))
+    broker = make_broker([FLAT, FLAT], cash=1_000, slippage=0.01)
     market(broker, 10)
     assert broker.available_margin() < 0
 

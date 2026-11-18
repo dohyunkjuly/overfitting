@@ -9,3 +9,4 @@ class Status(Enum):
     OPEN = 0
     FILLED = 1
     REJECTED = 2
+    CANCELLED = 3

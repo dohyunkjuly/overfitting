@@ -4,8 +4,9 @@ from typing import List, Dict, Optional, Tuple
 from overfitting.data import Data
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.slippage import SlippageModel
-from overfitting.types import OrderType
+from overfitting.slippage import Bar, resolve as resolve_slippage
+from overfitting.recorder import Recorder
+from overfitting.types import OrderType, Status
 import warnings
 from overfitting.errors import (
     EmptyOrderParameters,
@@ -27,7 +28,7 @@ class Broker:
                  commission_rate: float, 
                  maint_margin_rate: float, 
                  maint_amount:float,
-                 slippage_model:SlippageModel | None):
+                 slippage=None):
         
         self.data = data
         self.initial_capital = cash
@@ -35,7 +36,8 @@ class Broker:
         self.commission_rate = commission_rate
         self.maint_margin_rate = maint_margin_rate
         self.maint_amount = maint_amount
-        self.slippage_model= slippage_model
+        # A function (order, bar) -> executed price, or None for no slippage.
+        self.slippage = resolve_slippage(slippage)
         # open orders example:
         #   {
         #       btcusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
@@ -47,6 +49,9 @@ class Broker:
         self.trades = []
         self.funding_payments = []
         self.rejected_orders = []
+        # Every order ever placed, whatever became of it (see Order.status).
+        self.orders: List[Order] = []
+        self.recorder = Recorder(data)
         self._i = 0
 
     @property
@@ -131,23 +136,29 @@ class Broker:
 
         timestamp = pd.to_datetime(self.data.index[self._i])
         order = Order(timestamp, symbol, qty, price, type, stop_price, label)
+        self.orders.append(order)
 
-        if type == OrderType.STOP:
-            open = self._open(symbol, self._i)
-            if ((order.qty > 0 and order.stop_price < open) or
-                (order.qty < 0 and order.stop_price > open)):
-                raise StopOrderRejected(
-                    f"STOP order rejected: stop price {order.stop_price} would trigger immediately at current price {open}."
-                )
-    
-        # Reject orders the account cannot afford at the price we expect to pay.
-        if type == OrderType.MARKET:
-            expected_price = self._open(symbol, self._i)
-        elif price is not None:
-            expected_price = price
-        else:
-            expected_price = stop_price
-        self._check_margin(symbol, order, expected_price)
+        try:
+            if type == OrderType.STOP:
+                open = self._open(symbol, self._i)
+                if ((order.qty > 0 and order.stop_price < open) or
+                    (order.qty < 0 and order.stop_price > open)):
+                    raise StopOrderRejected(
+                        f"STOP order rejected: stop price {order.stop_price} would trigger immediately at current price {open}."
+                    )
+
+            # Reject orders the account cannot afford at the price we expect to pay.
+            if type == OrderType.MARKET:
+                expected_price = self._open(symbol, self._i)
+            elif price is not None:
+                expected_price = price
+            else:
+                expected_price = stop_price
+            self._check_margin(symbol, order, expected_price)
+        except (StopOrderRejected, InsufficientMargin) as e:
+            order.status = Status.REJECTED
+            order.reject_reason = str(e)
+            raise
 
         # Put new order in the open_orders list if not rejected
         self.open_orders[symbol][order.id] = order
@@ -162,8 +173,13 @@ class Broker:
 
         order = self.open_orders[symbol][order_id]
         del self.open_orders[symbol][order_id]
+        self._mark_cancelled(order)
 
         return order
+
+    def _mark_cancelled(self, order: Order) -> None:
+        order.status = Status.CANCELLED
+        order.cancelled_at = pd.to_datetime(self.data.index[min(self._i, len(self.data) - 1)])
 
     def cancel_all_orders(self, symbol: str):
         if symbol not in self.open_orders:
@@ -171,6 +187,7 @@ class Broker:
 
         orders = self.open_orders[symbol]
         for order_id in list(orders.keys()):
+            self._mark_cancelled(orders[order_id])
             del orders[order_id]
 
     def get_position(self, symbol: str) -> Position:
@@ -265,6 +282,7 @@ class Broker:
             price = self._open(symbol, self._i)
             amount = -float(position.qty) * price * float(rate)
             self.cash += amount
+            self.recorder.on_funding(symbol, amount)
             self.funding_payments.append({
                 "time": pd.to_datetime(self.data.index[self._i]),
                 "symbol": symbol,
@@ -275,12 +293,10 @@ class Broker:
             })
 
     def _slippage(self, symbol: str, order: Order):
-        if self.slippage_model:
-            bars = self._bars(symbol, self._i)
-            self.slippage_model.set_context(order, bars)
-            return self.slippage_model.compute()
-        
-        return order.theoretical_price 
+        if self.slippage:
+            return self.slippage(order, Bar(*self._bars(symbol, self._i)))
+
+        return order.theoretical_price
     
     def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
         order.theoretical_price = price if price else order.price
@@ -302,10 +318,13 @@ class Broker:
                 self._check_margin(symbol, order, order.theoretical_price)
             except InsufficientMargin as e:
                 self.open_orders.get(symbol, {}).pop(order.id, None)
-                self.rejected_orders.append({**order.to_dict(), "reject_reason": str(e)})
+                order.status = Status.REJECTED
+                order.reject_reason = str(e)
+                self.rejected_orders.append(order.to_dict())
                 return
             notional = float(abs(order.qty)) * order.executed_price
             commission = notional * self.commission_rate
+        qty_before = position.qty
         pnl = position.process_trade(order, liquidation)
         executed_time = pd.to_datetime(self.data.index[self._i])
 
@@ -315,6 +334,10 @@ class Broker:
         order.commission = commission
         order.realized_pnl = pnl - commission
         order.is_liquidation_order = bool(liquidation)
+        order.status = Status.FILLED
+        side = 1 if order.qty > 0 else -1
+        order.slippage = side * (order.executed_price - order.theoretical_price) * float(abs(order.qty))
+        self.recorder.on_fill(self._i, order, qty_before, pnl, commission, bool(liquidation))
 
         # Update trades and balance
         self.trades.append(order.to_dict())
@@ -389,5 +412,6 @@ class Broker:
                                     continue
                             
                             self._execute_trade(symbol, order)
-                    
+
+        self.recorder.on_bar_end(self._i, self)
         self._i += 1

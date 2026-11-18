@@ -1,4 +1,8 @@
 """Shared helpers for building tiny, hand-checkable markets."""
+import matplotlib
+
+matplotlib.use("Agg")  # draw charts without opening windows
+
 import pandas as pd
 import pytest
 
@@ -25,7 +29,7 @@ def make_broker(
     commission_rate=0.0,
     maint_margin_rate=0.005,
     maint_amount=0.0,
-    slippage_model=None,
+    slippage=None,
     symbol=SYMBOL,
 ):
     """A Broker over a single symbol. Commission defaults to zero so prices are easy to check."""
@@ -36,7 +40,7 @@ def make_broker(
         commission_rate=commission_rate,
         maint_margin_rate=maint_margin_rate,
         maint_amount=maint_amount,
-        slippage_model=slippage_model,
+        slippage=slippage,
     )
 
 

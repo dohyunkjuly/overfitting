@@ -1,7 +1,8 @@
 import uuid
 from decimal import Decimal
+from enum import Enum
 import pandas as pd
-from overfitting.types import OrderType
+from overfitting.types import OrderType, Status
 
 class Order:
     def __init__(self,
@@ -16,6 +17,9 @@ class Order:
         self.id = uuid.uuid4().hex[:16]
         self.created_at = time
         self.executed_at = None
+        self.cancelled_at = None
+        self.status = Status.OPEN
+        self.reject_reason = None
         self.symbol = symbol
         # Decimal qty so Position bookkeeping is exact
         self.qty = Decimal(str(qty))
@@ -27,6 +31,8 @@ class Order:
         self.is_liquidation_order = False
         self.theoretical_price = 0
         self.executed_price = 0
+        # What slippage cost on this fill, in currency (negative if it helped).
+        self.slippage = 0
         self.commission = 0
         self.pnl = 0
         self.realized_pnl = 0
@@ -53,7 +59,7 @@ class Order:
     def to_dict(self):
         return {
             k: (
-                v.name if isinstance(v, OrderType)
+                v.name if isinstance(v, Enum)
                 else float(v) if isinstance(v, Decimal)
                 else v
             )

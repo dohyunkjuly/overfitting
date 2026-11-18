@@ -32,11 +32,9 @@ classifiers = [
 
 dependencies = [
   "numpy>=1.17.0",
-  "pandas>=0.25.0",
-  "seaborn",
-  "matplotlib",
+  "pandas>=2.2",
   "scipy",
-  "plotly",
+  "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
@@ -58,6 +56,3 @@ exclude = ["tests*", "examples*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-  "slow: runs a full example backtest (deselect with -m 'not slow')",
-]

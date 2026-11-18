@@ -3,6 +3,7 @@ import pytest
 
 from conftest import SYMBOL, make_broker
 from overfitting import Slippage
+from overfitting.slippage import Bar, fixed_percent, resolve, skewed
 
 RATE = 0.001
 
@@ -119,7 +120,7 @@ def test_no_slippage_model_executes_at_theoretical_price():
 
 
 def test_zero_slippage_model_executes_at_theoretical_price():
-    broker = make_broker([(100, 110, 90, 105)], slippage_model=Slippage.Zero())
+    broker = make_broker([(100, 110, 90, 105)], slippage=0)
     trade = market(broker, 1)
 
     assert trade["executed_price"] == 100
@@ -127,7 +128,7 @@ def test_zero_slippage_model_executes_at_theoretical_price():
 
 @pytest.mark.parametrize("qty, expected", [(1, 101.0), (-1, 99.0)])
 def test_fixed_percent_slippage_moves_price_against_the_trader(qty, expected):
-    broker = make_broker([(100, 110, 90, 105)], slippage_model=Slippage.FixedPercent(f=0.01))
+    broker = make_broker([(100, 110, 90, 105)], slippage=0.01)
     trade = market(broker, qty)
 
     assert trade["theoretical_price"] == 100
@@ -139,7 +140,7 @@ def test_fixed_percent_slippage_moves_price_against_the_trader(qty, expected):
     (-1, 100 - 0.5 * (100 - 90)),   # sells slip toward the low
 ])
 def test_skewed_slippage_moves_toward_bar_extreme(qty, expected):
-    broker = make_broker([(100, 110, 90, 105)], slippage_model=Slippage.Skewed(f=0.5))
+    broker = make_broker([(100, 110, 90, 105)], slippage=skewed(0.5))
     trade = market(broker, qty)
 
     assert trade["executed_price"] == pytest.approx(expected)
@@ -149,7 +150,7 @@ def test_commission_uses_the_slipped_price():
     broker = make_broker(
         [(100, 110, 90, 105)],
         commission_rate=RATE,
-        slippage_model=Slippage.FixedPercent(f=0.01),
+        slippage=0.01,
     )
     trade = market(broker, 2)
 
@@ -159,7 +160,7 @@ def test_commission_uses_the_slipped_price():
 def test_slippage_costs_show_up_in_round_trip_pnl():
     broker = make_broker(
         [(100, 101, 99, 100), (100, 101, 99, 100)],
-        slippage_model=Slippage.FixedPercent(f=0.01),
+        slippage=0.01,
     )
     market(broker, 1)   # buys at 101
     market(broker, -1)  # sells at 99
@@ -168,13 +169,57 @@ def test_slippage_costs_show_up_in_round_trip_pnl():
 
 
 @pytest.mark.parametrize("factory, bad", [
-    (Slippage.Skewed, -0.1),
-    (Slippage.Skewed, 1.1),
-    (Slippage.FixedPercent, -0.01),
+    (skewed, -0.1),
+    (skewed, 1.1),
+    (fixed_percent, -0.01),
 ])
 def test_slippage_models_validate_their_parameter(factory, bad):
     with pytest.raises(ValueError):
-        factory(f=bad)
+        factory(bad)
+
+
+def test_a_number_means_fixed_percent_slippage():
+    assert resolve(None) is None
+    assert resolve(0) is None
+    order = type("O", (), {"qty": 1, "theoretical_price": 200.0})()
+    assert resolve(0.01)(order, Bar(200, 210, 190, 205)) == pytest.approx(202)
+
+
+def test_slippage_can_be_any_function_of_order_and_bar():
+    # One tick (0.5) worse than asked, whatever the price.
+    def one_tick(order, bar):
+        return order.theoretical_price + (0.5 if order.qty > 0 else -0.5)
+
+    broker = make_broker([(100, 110, 90, 105), (100, 110, 90, 105)], slippage=one_tick)
+    assert market(broker, 1)["executed_price"] == 100.5
+    assert market(broker, -1)["executed_price"] == 99.5
+
+
+def test_slippage_function_receives_the_bar_by_name():
+    seen = []
+    broker = make_broker([(100, 110, 90, 105)],
+                         slippage=lambda order, bar: seen.append(bar) or bar.high)
+    trade = market(broker, 1)
+
+    assert seen[0] == Bar(open=100, high=110, low=90, close=105)
+    assert trade["executed_price"] == 110
+
+
+def test_invalid_slippage_is_rejected():
+    with pytest.raises(TypeError):
+        make_broker([(100, 110, 90, 105)], slippage="a lot")
+
+
+def test_old_slippage_factories_still_work_with_a_warning():
+    with pytest.warns(DeprecationWarning):
+        model = Slippage.FixedPercent(f=0.01)
+    broker = make_broker([(100, 110, 90, 105)], slippage=model)
+    assert market(broker, 1)["executed_price"] == pytest.approx(101)
+
+    with pytest.warns(DeprecationWarning):
+        assert Slippage.Skewed(f=0.5) is not None
+    with pytest.warns(DeprecationWarning):
+        assert Slippage.Zero() is not None
 
 
 # ----------------------------------------------------- broker bookkeeping ---

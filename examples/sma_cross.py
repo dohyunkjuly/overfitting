@@ -15,8 +15,8 @@
 
 # +
 import pandas as pd
-from overfitting import Strategy, Slippage
-from overfitting.indicators import SMA
+from overfitting import Strategy
+from overfitting.indicators import sma, crossover, crossunder
 
 def load_data():
     df = pd.read_csv('./data/BTCUSDT.csv')
@@ -51,34 +51,21 @@ class MyStrategy(Strategy):
         self.asset = 'BTC'
         self.set_leverage(self.asset, 1)
 
-        self.sma_short = self.indicator(SMA, self.asset, window=20)
-        self.sma_long = self.indicator(SMA, self.asset, window=50)
+        close = self.data[self.asset].close
+        self.fast = self.I(sma, close, 20)
+        self.slow = self.I(sma, close, 50)
 
-    def next(self, i):
-        if i == 0:
-            return
-
-        sma_short = self.sma_short[i]
-        sma_long = self.sma_long[i]
-        previous_sma_short = self.sma_short[i - 1]
-        previous_sma_long = self.sma_long[i - 1]
-
-        if (
-            pd.isna(sma_short) or pd.isna(sma_long) or
-            pd.isna(previous_sma_short) or pd.isna(previous_sma_long)
-        ):
-            return
-
+    def next(self):
         position = self.get_position(self.asset)
 
         # Golden cross (entry)
-        if previous_sma_short <= previous_sma_long and sma_short > sma_long and position.qty == 0:
-            open_price = self.open(self.asset, i)
-            lot_size = self.get_balance() // open_price
-            self.limit_order(self.asset, lot_size, open_price)
+        if crossover(self.fast, self.slow) and position.qty == 0:
+            price = self.price(self.asset)
+            lot_size = self.get_balance() // price
+            self.limit_order(self.asset, lot_size, price)
 
         # Death cross (exit)
-        if previous_sma_short >= previous_sma_long and sma_short < sma_long and position.qty > 0:
+        elif crossunder(self.fast, self.slow) and position.qty > 0:
             self.market_order(self.asset, -position.qty)
 # -
 
@@ -92,7 +79,7 @@ strategy = MyStrategy(
     commission_rate=0.0002,
     maint_margin_rate=0.005,
     maint_amount=50,
-    slippage_model=Slippage.FixedPercent(f=0.001)
+    slippage=0.001,   # every fill is 0.1% worse than the order price
 )
 returns = strategy.run()
 strategy.plot(returns)
