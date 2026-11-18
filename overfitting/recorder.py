@@ -246,3 +246,38 @@ class Recorder:
         n = self._bars
         return pd.DataFrame({f: values[:n] for f, values in self._positions[symbol].items()},
                             index=self._index[:n])
+
+
+class NullRecorder:
+    """
+    Records nothing. Used with `Strategy(record=False)` when only the returns
+    matter, for example inside a parameter search. Every table comes back empty.
+    """
+
+    round_trips: list = []
+
+    def __init__(self, data):
+        self._symbols = set(data.symbols)
+
+    def on_fill(self, *args, **kwargs) -> None:
+        pass
+
+    def on_funding(self, *args, **kwargs) -> None:
+        pass
+
+    def on_bar_end(self, *args, **kwargs) -> None:
+        pass
+
+    def round_trips_frame(self) -> pd.DataFrame:
+        return pd.DataFrame(columns=ROUND_TRIP_COLUMNS)
+
+    def open_symbols(self) -> list[str]:
+        return []
+
+    def account_history(self) -> pd.DataFrame:
+        return pd.DataFrame(columns=list(ACCOUNT_FIELDS))
+
+    def position_history(self, symbol: str) -> pd.DataFrame:
+        if symbol not in self._symbols:
+            raise KeyError(f"No data for symbol {symbol!r}.")
+        return pd.DataFrame(columns=list(POSITION_FIELDS))

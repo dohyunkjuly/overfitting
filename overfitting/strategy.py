@@ -25,9 +25,17 @@ class Strategy:
                  maint_margin_rate: float =0.005,
                  maint_amount: float=0,
                  slippage=None,
-                 slippage_model=None):
+                 slippage_model=None,
+                 params: Optional[dict] = None,
+                 record: bool = True):
         """
         data: {symbol: DataFrame with open, high, low, close}.
+        params: values for the strategy's parameters, which are its class
+            attributes. `MyStrategy(data, params={"fast": 10})` runs with
+            `self.fast == 10` whatever the class says. Unknown names raise.
+        record: False skips recording round trips and per-bar history. The
+            run is faster and returns are identical; the fetch_* tables for
+            round trips, account and positions come back empty.
         slippage: a number (0.001 means every fill is 0.1% worse), a function
             `(order, bar) -> executed price`, or None. See overfitting.slippage.
         slippage_model: deprecated name for `slippage`.
@@ -38,8 +46,16 @@ class Strategy:
             if slippage is None:
                 slippage = slippage_model
 
+        for name, value in (params or {}).items():
+            if not hasattr(type(self), name):
+                raise AttributeError(
+                    f"{type(self).__name__} has no parameter {name!r}. Parameters are class "
+                    f"attributes, for example `{name} = {value!r}` in the class body.")
+            setattr(self, name, value)
+        self.params = dict(params or {})
+
         self.benchmark = benchmark
-        self.data = Data(data)
+        self.data = data if isinstance(data, Data) else Data(data)
         self.broker = Broker(
             data=self.data, 
             cash=initial_capital, 
@@ -47,6 +63,7 @@ class Strategy:
             maint_margin_rate=maint_margin_rate,
             maint_amount=maint_amount,
             slippage=slippage,
+            record=record,
         )
         self.balances = []           # the curve returns are computed from
         self.equity_curve = []       # cash + unrealized PnL at each bar's close
@@ -341,7 +358,7 @@ class Strategy:
         self.realized_balances = realized.tolist()
         self.returns = r.tolist()
 
-        return pd.Series(self.returns, index=t.tolist())
+        return pd.Series(r, index=t)
 
     def plot(self, returns: pd.Series, save_path=None, title="Simulation"):
         """

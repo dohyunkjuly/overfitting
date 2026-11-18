@@ -5,7 +5,7 @@ from overfitting.data import Data
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.slippage import Bar, resolve as resolve_slippage
-from overfitting.recorder import Recorder
+from overfitting.recorder import NullRecorder, Recorder
 from overfitting.types import OrderType, Status
 import warnings
 from overfitting.errors import (
@@ -28,7 +28,8 @@ class Broker:
                  commission_rate: float, 
                  maint_margin_rate: float, 
                  maint_amount:float,
-                 slippage=None):
+                 slippage=None,
+                 record: bool = True):
         
         self.data = data
         self.initial_capital = cash
@@ -51,7 +52,7 @@ class Broker:
         self.rejected_orders = []
         # Every order ever placed, whatever became of it (see Order.status).
         self.orders: List[Order] = []
-        self.recorder = Recorder(data)
+        self.recorder = Recorder(data) if record else NullRecorder(data)
         self._i = 0
 
     @property

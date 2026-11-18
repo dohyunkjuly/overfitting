@@ -282,6 +282,83 @@ MyStrategy(data, slippage=lambda order, bar: order.theoretical_price + 0.5)   # 
 
 A slippage model is a function `(order, bar) -> executed price`. `order.qty` is positive for a buy, and `bar` has `open`, `high`, `low` and `close`. `slippage_model=` and `Slippage.FixedPercent(f=...)` still work but are deprecated.
 
+## Parameter Optimization
+
+A strategy's parameters are its class attributes. `optimize` runs the strategy once for every combination of the values you give and reports the best one:
+
+```python
+from overfitting import Strategy, optimize
+from overfitting.indicators import sma, crossover, crossunder
+
+class SmaCross(Strategy):
+    fast = 20
+    slow = 50
+
+    def init(self):
+        close = self.data["BTC"].close
+        self.fast_ma = self.I(sma, close, self.fast)
+        self.slow_ma = self.I(sma, close, self.slow)
+
+    def next(self):
+        position = self.get_position("BTC")
+        if crossover(self.fast_ma, self.slow_ma) and position.qty == 0:
+            price = self.price("BTC")
+            self.limit_order("BTC", self.get_balance() // price, price)
+        elif crossunder(self.fast_ma, self.slow_ma) and position.qty > 0:
+            self.market_order("BTC", -position.qty)
+
+result = optimize(
+    SmaCross, {"BTC": price_df},
+    params={"fast": range(5, 55, 5), "slow": range(20, 220, 20)},
+    maximize="sharpe_ratio",
+    constraint=lambda p: p.fast < p.slow,
+    slippage=0.001,                      # any Strategy argument can be passed
+)
+print(result)
+```
+
+```text
+Optimization of SmaCross
+  Trials            90 (grid)
+  Maximized         sharpe_ratio
+  Best parameters   fast=45, slow=100
+
+                       Train (70%)    Test (30%)
+  Total Return             136.55%         1.89%
+  CAGR                     109.48%         3.80%
+  Volatility                31.90%        32.36%
+  Sharpe Ratio               2.476         0.274
+  Sortino Ratio              5.087         0.442
+  Max Drawdown             -14.39%       -15.80%
+  Calmar Ratio               7.608         0.240
+  Fills                        111            47
+
+  The search only saw data before 2024-02-29. The test column is
+  how these parameters did afterwards, on data that played no part in
+  choosing them. The train column is the best of 90 tries, so expect
+  it to be flattering.
+```
+
+The best of many combinations always looks better than it is, because part of it is luck. So the search only sees the first 70% of the data, and the result shows how the chosen parameters did on the remaining 30%. In the example above, a Sharpe ratio of 2.48 in the search became 0.27 on unseen data.
+
+```python
+result.best_params                 # {"fast": 45, "slow": 100}
+result.table                       # every combination tried, best first
+result.heatmap("fast", "slow")     # the metric as a grid of two parameters
+result.strategy                    # the winner, run over all the data
+result.strategy.plot(result.returns)
+```
+
+| Argument | Meaning |
+|---|---|
+| `maximize` | `total_return`, `cagr`, `volatility`, `sharpe_ratio`, `sortino_ratio`, `max_drawdown`, `calmar_ratio`, `fills`, or a function of those, e.g. `lambda m: m["cagr"] / abs(m["max_drawdown"])` |
+| `constraint` | Function returning `False` for combinations to skip |
+| `method`, `n`, `seed` | `"grid"` tries everything; `"random"` tries `n` combinations |
+| `test_size` | Share of the data held out at the end (default `0.3`). `0` searches on everything |
+| `workers` | Processes to use. Default is all cores; `1` runs in the current process |
+
+Combinations run in parallel on macOS and Linux. On the example above, 1,000 combinations of 14,500 hourly bars take about 6 seconds on a 10-core laptop.
+
 ## Report and Charts
 
 The summary has eleven sections: overview, returns, risk, drawdown, Sharpe ratio reliability, benchmark, trades, trade quality, costs, exposure and margin, and orders, followed by a per-symbol table and the worst drawdowns.

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Parameter optimizer.** `optimize(MyStrategy, data, params={...}, maximize="sharpe_ratio")` runs a grid or random search over a strategy's parameters, in parallel on macOS and Linux. By default the search only sees the first 70% of the data, and the result shows the winner's metrics on the held-out 30% next to its train metrics, with the number of trials. `result.table` lists every combination and `result.heatmap(x, y)` gives a grid of two parameters.
+- **Strategy parameters.** Parameters are class attributes; `MyStrategy(data, params={"fast": 10})` overrides them for one run.
+- `Strategy(record=False)` skips recording round trips and per-bar history, for runs where only the returns matter.
+- `Strategy` accepts an already prepared `Data` object, so many runs can share one.
+
+### Changed
+
+- Backtests run faster: reading indicators inside `next()` and building the returns series do less work. The SMA example went from about 90 ms to 68 ms per run, and to 47 ms with `record=False`. Results are unchanged.
+
 ## 0.5.0 (2026-11-18)
 
 This release fixes correctness problems in the engine. **Backtest results will change**: Sharpe, drawdown and other return statistics move for any strategy that holds positions across bars, and strategies that were over-sized or liquidated will end with different balances.

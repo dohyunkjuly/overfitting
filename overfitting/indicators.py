@@ -112,6 +112,9 @@ def donchian(high: pd.Series, low: pd.Series, window: int = 20) -> pd.DataFrame:
 
 # -------------------------------------------------------------------- lines ---
 
+NAN = float("nan")
+
+
 class Line:
     """
     One indicator output, read relative to the current bar.
@@ -130,6 +133,7 @@ class Line:
     def __init__(self, values, cursor, name: str | None = None):
         self._series = pd.Series(np.asarray(values, dtype=float), name=name)
         self._array = self._series.to_numpy()
+        self._list = self._array.tolist()      # plain floats: much faster to read one at a time
         self._cursor = cursor
         self.name = name
 
@@ -145,13 +149,15 @@ class Line:
         return self._cursor.i
 
     def __getitem__(self, key):
-        completed = self._array[:self._cursor.i]
+        i = self._cursor.i
+        if key.__class__ is int:
+            index = i + key if key < 0 else key
+            return self._list[index] if 0 <= index < i else NAN
         if isinstance(key, slice):
-            return completed[key]
-        try:
-            return float(completed[key])
-        except IndexError:
-            return float("nan")
+            return self._array[:i][key]
+        index = int(key)
+        index = i + index if index < 0 else index
+        return self._list[index] if 0 <= index < i else NAN
 
     def __repr__(self) -> str:
         return f"Line({self.name or 'values'}, last={self[-1]})"
@@ -187,8 +193,10 @@ class Lines:
 
 def _last_two(x) -> tuple[float, float]:
     """(previous, latest) for a Line, or the same number twice for a constant."""
-    if isinstance(x, Line):
-        return x[-2], x[-1]
+    if x.__class__ is Line:
+        i = x._cursor.i
+        values = x._list
+        return (values[i - 2] if i >= 2 else NAN), (values[i - 1] if i >= 1 else NAN)
     return float(x), float(x)
 
 
