@@ -80,7 +80,6 @@ Overview
   CAGR                                                   54.13%
 
 Returns
-  Annualized Mean Return                                 48.64%
   Best Day                                               10.08%
   Worst Day                                              -5.38%
   Best Month                                             27.88%
@@ -103,48 +102,32 @@ Risk
   Tail Ratio                                              1.569
   Common Sense Ratio                                      2.064
   Daily Value at Risk (95%)                              -2.19%
-  Daily Value at Risk (99%)                              -3.74%
   Daily Expected Shortfall (95%)                         -3.16%
-  Daily Expected Shortfall (99%)                         -4.17%
   Skew (daily)                                            1.804
   Excess Kurtosis (daily)                                 7.538
-  Autocorrelation (1 day)                                 0.075
-  Kelly Fraction                                          4.445
 
 Drawdown
   Max Drawdown                                          -26.53%
   Current Drawdown                                      -20.56%
   Average Drawdown                                       -4.91%
   Longest Drawdown (days)                                   219
-  Average Drawdown Duration (days)                       31.500
-  Average Recovery Time (days)                            6.765
   Time Underwater                                        93.41%
   Ulcer Index                                            12.12%
-  Pain Index                                              9.74%
   Recovery Factor                                         3.970
-  Martin Ratio                                            4.465
-  Drawdowns Deeper Than 5%                                    6
-  Drawdowns Deeper Than 10%                                   2
-  Drawdowns Deeper Than 20%                                   2
 
 Sharpe Ratio Reliability
-  Sharpe Standard Error                                   0.726
-  Sharpe 95% Range (low)                                  0.047
-  Sharpe 95% Range (high)                                 2.894
+  Sharpe 95% Range                                 0.05 to 2.89
   Probability Sharpe Above 0                             97.86%
-  Days Needed To Confirm Sharpe                             401
 
 Benchmark
   Alpha (annualized)                                      3.44%
   Beta                                                    0.509
   Correlation                                             0.758
-  R-Squared                                               0.574
   Tracking Error (annualized)                            32.39%
   Information Ratio                                      -1.238
   Excess Return (annualized)                            -61.21%
   Up Capture                                              0.493
   Down Capture                                            0.479
-  Days Beating Benchmark                                 43.00%
 
 Trades
   Total Trades                                              182
@@ -160,21 +143,13 @@ Trades
   Payoff Ratio                                            2.282
   Profit Factor                                           1.361
   Expectancy per Trade                                   578.73
-  Average Trade Return                                    0.52%
-  Average Winning Return                                  3.94%
-  Average Losing Return                                  -1.52%
-  Expectancy (R)                                          0.226
-  System Quality Number                                   1.220
   Average Holding Time (bars)                            43.352
-  Median Holding Time (bars)                             33.000
-  Longest Holding Time (bars)                               282
   Average Holding Time, Winners (bars)                   73.294
   Average Holding Time, Losers (bars)                    25.491
   Longest Winning Streak (trades)                             7
   Longest Losing Streak (trades)                              8
   Trades per Month                                        9.233
   Profit From Best Trade                                 26.02%
-  Profit From Best 5 Trades                             119.77%
   Net Profit Without Best 5 Trades                   -20,822.32
   Gross Profit                                       396,927.83
   Gross Loss                                        -291,598.92
@@ -183,9 +158,6 @@ Trades
 Trade Quality
   Average Adverse Excursion                              -1.85%
   Average Favourable Excursion                            3.08%
-  Edge Ratio                                              1.665
-  Profit Captured                                        18.08%
-  Average Profit Given Back                               2.52%
   Liquidations                                                0
 
 Costs
@@ -196,8 +168,6 @@ Costs
   Total Costs                                         11,407.29
   Profit Before Costs                                116,736.20
   Costs as Share of Profit Before Costs                   9.77%
-  Average Cost per Fill                                   31.34
-  Break-Even Commission Multiple                         10.233
   Traded Value                                    57,036,444.00
   Turnover (times equity per year)                      196.244
 
@@ -206,12 +176,9 @@ Exposure and Margin
   Average Leverage                                        0.491
   Average Leverage in Market                              0.906
   Maximum Leverage                                        0.991
-  Average Net Exposure                                   49.14%
   Average Margin Usage                                   48.02%
   Peak Margin Usage                                     102.54%
   Closest Distance to Liquidation                        99.50%
-  Average Distance to Liquidation                        99.54%
-  Liquidation Loss                                         0.00
 
 Orders
   Orders Placed                                             364

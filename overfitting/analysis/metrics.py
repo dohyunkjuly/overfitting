@@ -688,18 +688,16 @@ def minimum_track_record_length(returns, threshold: float = 0.0, confidence: flo
 # ------------------------------------------------------------------ summary ---
 
 def summary(returns, benchmark=None, periods_per_year: float = DAYS_PER_YEAR) -> pd.Series:
-    """Every scalar metric in this module, as one labelled Series."""
+    """The headline return metrics, as one labelled Series (what the report prints)."""
     r = _clean(returns)
     ppy = periods_per_year
     low, high = sharpe_confidence_interval(r, periods_per_year=ppy)
-    jb_stat, jb_p = jarque_bera(r)
 
     out = {
         # returns
         "periods": len(r),
         "total_return": total_return(r),
         "cagr": cagr(r, ppy),
-        "annualized_mean": annualized_mean(r, ppy),
         "best_period": best(r),
         "worst_period": worst(r),
         "positive_share": positive_share(r),
@@ -718,36 +716,21 @@ def summary(returns, benchmark=None, periods_per_year: float = DAYS_PER_YEAR) ->
         "tail_ratio": tail_ratio(r),
         "common_sense_ratio": common_sense_ratio(r),
         "value_at_risk_95": value_at_risk(r, 0.95),
-        "value_at_risk_99": value_at_risk(r, 0.99),
         "expected_shortfall_95": expected_shortfall(r, 0.95),
-        "expected_shortfall_99": expected_shortfall(r, 0.99),
         "skewness": skewness(r),
         "kurtosis": kurtosis(r),
-        "jarque_bera_statistic": jb_stat,
-        "jarque_bera_p_value": jb_p,
-        "autocorrelation_lag_1": autocorrelation(r, 1),
-        "kelly_fraction": kelly_fraction(r),
         # drawdown
         "max_drawdown": max_drawdown(r),
         "current_drawdown": current_drawdown(r),
         "average_drawdown": average_drawdown(r),
         "longest_drawdown": longest_drawdown(r),
-        "average_drawdown_duration": average_drawdown_duration(r),
-        "average_recovery_time": average_recovery_time(r),
         "time_underwater": time_underwater(r),
         "ulcer_index": ulcer_index(r),
-        "pain_index": pain_index(r),
         "recovery_factor": recovery_factor(r),
-        "martin_ratio": martin_ratio(r, ppy),
-        "drawdowns_over_5pct": drawdown_count(r, 0.05),
-        "drawdowns_over_10pct": drawdown_count(r, 0.10),
-        "drawdowns_over_20pct": drawdown_count(r, 0.20),
-        # significance
-        "sharpe_standard_error": sharpe_standard_error(r, ppy),
+        # how much the Sharpe ratio can be trusted
         "sharpe_ci_low": low,
         "sharpe_ci_high": high,
         "probabilistic_sharpe_ratio": probabilistic_sharpe_ratio(r, periods_per_year=ppy),
-        "minimum_track_record_length": minimum_track_record_length(r, periods_per_year=ppy),
     }
 
     if benchmark is not None:
@@ -756,13 +739,11 @@ def summary(returns, benchmark=None, periods_per_year: float = DAYS_PER_YEAR) ->
             "alpha": alpha(r, b, ppy),
             "beta": beta(r, b),
             "correlation": correlation(r, b),
-            "r_squared": r_squared(r, b),
             "tracking_error": tracking_error(r, b, ppy),
             "information_ratio": information_ratio(r, b, ppy),
             "excess_return": excess_return(r, b, ppy),
             "up_capture": up_capture(r, b),
             "down_capture": down_capture(r, b),
-            "outperformance_share": outperformance_share(r, b),
         })
 
     return pd.Series(out, dtype=object)
@@ -806,9 +787,8 @@ def trade_summary(round_trips: pd.DataFrame) -> pd.Series:
     payoff_ratio            average win over average loss
     profit_factor           total won over total lost
     expectancy              average net PnL per trade
-    expectancy_r            average net PnL in units of the average loss
-    system_quality_number   sqrt(trades) * mean(R) / std(R), R = PnL over average loss
-    profit_from_best_*      share of net profit that came from the best trades
+    profit_from_best_trade  share of net profit that came from the single best trade
+    net_profit_without_best_5   net profit if the five best trades had not happened
     """
     rt = round_trips
     if _empty(rt):
@@ -818,7 +798,6 @@ def trade_summary(round_trips: pd.DataFrame) -> pd.Series:
     wins, losses = net[net > 0], net[net < 0]
     longs, shorts = rt[rt["side"] == "LONG"], rt[rt["side"] == "SHORT"]
     average_loss = abs(float(losses.mean())) if len(losses) else NAN
-    r_multiples = net / average_loss if average_loss else pd.Series(dtype=float)
     bars = rt["bars_held"].astype(float)
     total = float(net.sum())
     ranked = net.sort_values(ascending=False)
@@ -839,23 +818,13 @@ def trade_summary(round_trips: pd.DataFrame) -> pd.Series:
         "payoff_ratio": _ratio(_mean(wins), average_loss),
         "profit_factor": _ratio(float(wins.sum()), -float(losses.sum())),
         "expectancy": float(net.mean()),
-        "average_return": _mean(rt["return_pct"]),
-        "average_winning_return": _mean(rt.loc[net > 0, "return_pct"]),
-        "average_losing_return": _mean(rt.loc[net < 0, "return_pct"]),
-        "expectancy_r": _mean(r_multiples),
-        "system_quality_number": (
-            _ratio(float(r_multiples.mean()), float(r_multiples.std(ddof=1))) * math.sqrt(len(rt))
-            if len(r_multiples) > 1 else NAN),
         "average_bars_held": float(bars.mean()),
-        "median_bars_held": float(bars.median()),
-        "longest_bars_held": float(bars.max()),
         "average_bars_held_winners": _mean(bars[net > 0]),
         "average_bars_held_losers": _mean(bars[net < 0]),
         "longest_winning_streak": _longest_run(net > 0),
         "longest_losing_streak": _longest_run(net < 0),
         "trades_per_month": len(rt) / months,
         "profit_from_best_trade": _ratio(float(ranked.iloc[0]), total) if total > 0 else NAN,
-        "profit_from_best_5_trades": _ratio(float(ranked.head(5).sum()), total) if total > 0 else NAN,
         "net_profit_without_best_5": total - float(ranked.head(5).sum()),
         "gross_profit": float(wins.sum()),
         "gross_loss": float(losses.sum()),
@@ -870,26 +839,16 @@ def quality_summary(round_trips: pd.DataFrame) -> pd.Series:
 
     average_adverse_excursion      average worst move against the trade
     average_favourable_excursion   average best move in its favour
-    edge_ratio                     favourable over adverse; above 1 means
-                                   trades run further for you than against you
-    profit_captured                price return actually kept, as a share of
-                                   the best return that was available
-    average_profit_given_back      average gap between a trade's best point and its exit
     """
     rt = round_trips
     if _empty(rt):
         return pd.Series({"liquidations": 0}, dtype=object)
 
-    side = np.where(rt["side"] == "LONG", 1.0, -1.0)
-    price_return = side * (rt["exit_price"] - rt["entry_price"]) / rt["entry_price"]
     mae, mfe = rt["mae"].astype(float), rt["mfe"].astype(float)
 
     return pd.Series({
         "average_adverse_excursion": float(mae.mean()),
         "average_favourable_excursion": float(mfe.mean()),
-        "edge_ratio": _ratio(float(mfe.mean()), abs(float(mae.mean()))),
-        "profit_captured": _ratio(float(price_return.sum()), float(mfe.sum())),
-        "average_profit_given_back": float((mfe - price_return).mean()),
         "liquidations": int(rt["is_liquidation"].sum()),
     }, dtype=object)
 
@@ -905,8 +864,6 @@ def cost_summary(fills: pd.DataFrame, funding: pd.DataFrame | None = None,
                             price with no commission and no funding
     total_costs             commission + slippage + net funding paid
     cost_share              total costs as a share of profit before costs
-    break_even_commission   how many times larger commission could be before
-                            net profit reaches zero
     turnover                traded value over average equity, per year
     """
     if _empty(fills):
@@ -937,8 +894,6 @@ def cost_summary(fills: pd.DataFrame, funding: pd.DataFrame | None = None,
         "total_costs": costs,
         "profit_before_costs": before_costs,
         "cost_share": _ratio(costs, before_costs) if before_costs > 0 else NAN,
-        "average_cost_per_fill": costs / len(fills),
-        "break_even_commission": _ratio(net + commission, commission) if net > 0 else NAN,
         "traded_value": traded,
         "turnover": turnover,
     }, dtype=object)
@@ -946,8 +901,8 @@ def cost_summary(fills: pd.DataFrame, funding: pd.DataFrame | None = None,
 
 # ----------------------------------------------------------------- exposure ---
 
-def exposure_summary(account: pd.DataFrame, positions: dict[str, pd.DataFrame] | None = None,
-                     round_trips: pd.DataFrame | None = None) -> pd.Series:
+def exposure_summary(account: pd.DataFrame,
+                     positions: dict[str, pd.DataFrame] | None = None) -> pd.Series:
     """
     How much of the account was at risk, from the per-bar history.
 
@@ -955,8 +910,8 @@ def exposure_summary(account: pd.DataFrame, positions: dict[str, pd.DataFrame] |
     average_leverage             gross exposure over equity, averaged over all bars
     average_leverage_in_market   the same, over bars with a position only
     margin usage                 margin locked over equity
-    distance to liquidation      how far the close was from the liquidation
-                                 price, as a share of the close (smaller is closer)
+    closest distance to liquidation   the nearest the close came to the liquidation
+                                 price, as a share of the close
     """
     if _empty(account):
         return pd.Series(dtype=object)
@@ -974,21 +929,14 @@ def exposure_summary(account: pd.DataFrame, positions: dict[str, pd.DataFrame] |
             distances.append(side * (held["close"] - held["liquidation_price"]) / held["close"])
     distance = pd.concat(distances) if distances else pd.Series(dtype=float)
 
-    liquidation_loss = 0.0
-    if not _empty(round_trips):
-        liquidation_loss = float(round_trips.loc[round_trips["is_liquidation"], "net_pnl"].sum())
-
     return pd.Series({
         "time_in_market": float(in_market.mean()),
         "average_leverage": _mean(leverage),
         "average_leverage_in_market": _mean(leverage[in_market]),
         "maximum_leverage": float(leverage.max()) if leverage.notna().any() else NAN,
-        "average_net_exposure": _mean(account["net_exposure"] / equity),
         "average_margin_usage": _mean(margin_usage),
         "peak_margin_usage": float(margin_usage.max()) if margin_usage.notna().any() else NAN,
         "closest_distance_to_liquidation": float(distance.min()) if len(distance) else NAN,
-        "average_distance_to_liquidation": _mean(distance),
-        "liquidation_loss": liquidation_loss,
     }, dtype=object)
 
 

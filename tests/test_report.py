@@ -53,7 +53,7 @@ def test_every_metric_is_listed_in_a_section(report):
 
     listed = {label for _, labels in SECTIONS for label in labels}
     assert set(report.metrics.index) <= listed
-    assert len(report.metrics) == 64  # 74 with a benchmark
+    assert len(report.metrics) == 49  # 57 with a benchmark
     assert len(report.summary_df) == len(report.metrics)
 
 
@@ -65,6 +65,8 @@ def test_values_are_formatted_by_kind(report):
     assert text["Total Trades"] == "2"
     assert text["Start Date"] == "2024-01-01 00:00"
     assert "." in text["Sharpe Ratio"]
+    low, high = (float(v) for v in text["Sharpe 95% Range"].split(" to "))
+    assert low < report.metrics["Sharpe Ratio"] < high
 
 
 def test_undefined_metrics_print_as_not_available():
@@ -72,6 +74,7 @@ def test_undefined_metrics_print_as_not_available():
     flat = Report(pd.Series(0.0, index=index), [], 10_000)
 
     assert flat.summary_df.loc["Sharpe Ratio", "Value"] == "n/a"
+    assert flat.summary_df.loc["Sharpe 95% Range", "Value"] == "n/a"
     assert flat.summary_df.loc["Win Rate (%)", "Value"] == "n/a"
 
 

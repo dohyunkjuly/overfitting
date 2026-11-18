@@ -15,18 +15,16 @@ IMAGE_DPI = 120
 
 # Labels printed as percentages, as whole numbers, and as money.
 PERCENT = {
-    "Total Return", "CAGR", "Annualized Mean Return", "Best Day", "Worst Day", "Best Month",
-    "Worst Month", "Positive Days", "Positive Months", "Average Up Day", "Average Down Day",
+    "Total Return", "CAGR", "Best Day", "Worst Day", "Best Month", "Worst Month",
+    "Positive Days", "Positive Months", "Average Up Day", "Average Down Day",
     "Volatility (annualized)", "Downside Deviation (annualized)", "Daily Value at Risk (95%)",
-    "Daily Value at Risk (99%)", "Daily Expected Shortfall (95%)", "Daily Expected Shortfall (99%)",
-    "Max Drawdown", "Current Drawdown", "Average Drawdown", "Time Underwater", "Ulcer Index",
-    "Pain Index", "Probability Sharpe Above 0", "Alpha (annualized)",
-    "Tracking Error (annualized)", "Excess Return (annualized)", "Days Beating Benchmark",
+    "Daily Expected Shortfall (95%)", "Max Drawdown", "Current Drawdown", "Average Drawdown",
+    "Time Underwater", "Ulcer Index", "Probability Sharpe Above 0", "Alpha (annualized)",
+    "Tracking Error (annualized)", "Excess Return (annualized)",
 }
 WHOLE = {
     "Longest Winning Streak (days)", "Longest Losing Streak (days)", "Longest Drawdown (days)",
-    "Drawdowns Deeper Than 5%", "Drawdowns Deeper Than 10%", "Drawdowns Deeper Than 20%",
-    "Days Needed To Confirm Sharpe", "Total Trades", "Winning Trades", "Losing Trades",
+    "Total Trades", "Winning Trades", "Losing Trades",
 }
 MONEY = {"Initial Balance", "Final Balance", "Gross Profit", "Gross Loss", "Net Profit"}
 
@@ -36,31 +34,26 @@ SECTIONS = [
         "Total Return", "CAGR",
     ]),
     ("Returns", [
-        "Annualized Mean Return", "Best Day", "Worst Day", "Best Month", "Worst Month",
+        "Best Day", "Worst Day", "Best Month", "Worst Month",
         "Positive Days", "Positive Months", "Average Up Day", "Average Down Day",
         "Longest Winning Streak (days)", "Longest Losing Streak (days)",
     ]),
     ("Risk", [
         "Volatility (annualized)", "Downside Deviation (annualized)", "Sharpe Ratio",
         "Sortino Ratio", "Calmar Ratio", "Omega Ratio", "Gain to Pain Ratio", "Tail Ratio",
-        "Common Sense Ratio", "Daily Value at Risk (95%)", "Daily Value at Risk (99%)",
-        "Daily Expected Shortfall (95%)", "Daily Expected Shortfall (99%)", "Skew (daily)",
-        "Excess Kurtosis (daily)", "Autocorrelation (1 day)", "Kelly Fraction",
+        "Common Sense Ratio", "Daily Value at Risk (95%)", "Daily Expected Shortfall (95%)",
+        "Skew (daily)", "Excess Kurtosis (daily)",
     ]),
     ("Drawdown", [
         "Max Drawdown", "Current Drawdown", "Average Drawdown", "Longest Drawdown (days)",
-        "Average Drawdown Duration (days)", "Average Recovery Time (days)", "Time Underwater",
-        "Ulcer Index", "Pain Index", "Recovery Factor", "Martin Ratio",
-        "Drawdowns Deeper Than 5%", "Drawdowns Deeper Than 10%", "Drawdowns Deeper Than 20%",
+        "Time Underwater", "Ulcer Index", "Recovery Factor",
     ]),
     ("Sharpe Ratio Reliability", [
-        "Sharpe Standard Error", "Sharpe 95% Range (low)", "Sharpe 95% Range (high)",
-        "Probability Sharpe Above 0", "Days Needed To Confirm Sharpe",
+        "Sharpe 95% Range", "Probability Sharpe Above 0",
     ]),
     ("Benchmark", [
-        "Alpha (annualized)", "Beta", "Correlation", "R-Squared", "Tracking Error (annualized)",
+        "Alpha (annualized)", "Beta", "Correlation", "Tracking Error (annualized)",
         "Information Ratio", "Excess Return (annualized)", "Up Capture", "Down Capture",
-        "Days Beating Benchmark",
     ]),
     # Used only when the report is built without recorded round trips.
     ("Trades", [
@@ -86,21 +79,13 @@ RECORDED = [
         ("payoff_ratio", "Payoff Ratio", "number"),
         ("profit_factor", "Profit Factor", "number"),
         ("expectancy", "Expectancy per Trade", "money"),
-        ("average_return", "Average Trade Return", "percent"),
-        ("average_winning_return", "Average Winning Return", "percent"),
-        ("average_losing_return", "Average Losing Return", "percent"),
-        ("expectancy_r", "Expectancy (R)", "number"),
-        ("system_quality_number", "System Quality Number", "number"),
         ("average_bars_held", "Average Holding Time (bars)", "number"),
-        ("median_bars_held", "Median Holding Time (bars)", "number"),
-        ("longest_bars_held", "Longest Holding Time (bars)", "whole"),
         ("average_bars_held_winners", "Average Holding Time, Winners (bars)", "number"),
         ("average_bars_held_losers", "Average Holding Time, Losers (bars)", "number"),
         ("longest_winning_streak", "Longest Winning Streak (trades)", "whole"),
         ("longest_losing_streak", "Longest Losing Streak (trades)", "whole"),
         ("trades_per_month", "Trades per Month", "number"),
         ("profit_from_best_trade", "Profit From Best Trade", "percent"),
-        ("profit_from_best_5_trades", "Profit From Best 5 Trades", "percent"),
         ("net_profit_without_best_5", "Net Profit Without Best 5 Trades", "money"),
         ("gross_profit", "Gross Profit", "money"),
         ("gross_loss", "Gross Loss", "money"),
@@ -109,9 +94,6 @@ RECORDED = [
     ("Trade Quality", "quality", [
         ("average_adverse_excursion", "Average Adverse Excursion", "percent"),
         ("average_favourable_excursion", "Average Favourable Excursion", "percent"),
-        ("edge_ratio", "Edge Ratio", "number"),
-        ("profit_captured", "Profit Captured", "percent"),
-        ("average_profit_given_back", "Average Profit Given Back", "percent"),
         ("liquidations", "Liquidations", "whole"),
     ]),
     ("Costs", "cost", [
@@ -122,8 +104,6 @@ RECORDED = [
         ("total_costs", "Total Costs", "money"),
         ("profit_before_costs", "Profit Before Costs", "money"),
         ("cost_share", "Costs as Share of Profit Before Costs", "percent"),
-        ("average_cost_per_fill", "Average Cost per Fill", "money"),
-        ("break_even_commission", "Break-Even Commission Multiple", "number"),
         ("traded_value", "Traded Value", "money"),
         ("turnover", "Turnover (times equity per year)", "number"),
     ]),
@@ -132,12 +112,9 @@ RECORDED = [
         ("average_leverage", "Average Leverage", "number"),
         ("average_leverage_in_market", "Average Leverage in Market", "number"),
         ("maximum_leverage", "Maximum Leverage", "number"),
-        ("average_net_exposure", "Average Net Exposure", "percent"),
         ("average_margin_usage", "Average Margin Usage", "percent"),
         ("peak_margin_usage", "Peak Margin Usage", "percent"),
         ("closest_distance_to_liquidation", "Closest Distance to Liquidation", "percent"),
-        ("average_distance_to_liquidation", "Average Distance to Liquidation", "percent"),
-        ("liquidation_loss", "Liquidation Loss", "money"),
     ]),
     ("Orders", "order", [
         ("orders_placed", "Orders Placed", "whole"),
@@ -173,6 +150,11 @@ def _format_value(label: str, value) -> str:
     """One metric as display text."""
     if isinstance(value, pd.Timestamp):
         return f"{value:%Y-%m-%d %H:%M}"
+    if isinstance(value, tuple):            # a range, e.g. a confidence interval
+        if not all(np.isfinite(v) for v in value):
+            return "n/a"
+        low, high = value
+        return f"{low:,.2f} to {high:,.2f}"
     if value is None or (isinstance(value, float) and not np.isfinite(value)):
         return "n/a"
     if label in PERCENT:
@@ -353,7 +335,6 @@ class Report:
             "Total Return": stats["total_return"],
             "CAGR": stats["cagr"],
             # returns
-            "Annualized Mean Return": stats["annualized_mean"],
             "Best Day": stats["best_period"],
             "Worst Day": stats["worst_period"],
             "Best Month": metrics.best(monthly),
@@ -375,34 +356,20 @@ class Report:
             "Tail Ratio": stats["tail_ratio"],
             "Common Sense Ratio": stats["common_sense_ratio"],
             "Daily Value at Risk (95%)": stats["value_at_risk_95"],
-            "Daily Value at Risk (99%)": stats["value_at_risk_99"],
             "Daily Expected Shortfall (95%)": stats["expected_shortfall_95"],
-            "Daily Expected Shortfall (99%)": stats["expected_shortfall_99"],
             "Skew (daily)": stats["skewness"],
             "Excess Kurtosis (daily)": stats["kurtosis"],
-            "Autocorrelation (1 day)": stats["autocorrelation_lag_1"],
-            "Kelly Fraction": stats["kelly_fraction"],
             # drawdown
             "Max Drawdown": stats["max_drawdown"],
             "Current Drawdown": stats["current_drawdown"],
             "Average Drawdown": stats["average_drawdown"],
             "Longest Drawdown (days)": stats["longest_drawdown"],
-            "Average Drawdown Duration (days)": stats["average_drawdown_duration"],
-            "Average Recovery Time (days)": stats["average_recovery_time"],
             "Time Underwater": stats["time_underwater"],
             "Ulcer Index": stats["ulcer_index"],
-            "Pain Index": stats["pain_index"],
             "Recovery Factor": stats["recovery_factor"],
-            "Martin Ratio": stats["martin_ratio"],
-            "Drawdowns Deeper Than 5%": stats["drawdowns_over_5pct"],
-            "Drawdowns Deeper Than 10%": stats["drawdowns_over_10pct"],
-            "Drawdowns Deeper Than 20%": stats["drawdowns_over_20pct"],
             # how much the Sharpe ratio can be trusted
-            "Sharpe Standard Error": stats["sharpe_standard_error"],
-            "Sharpe 95% Range (low)": stats["sharpe_ci_low"],
-            "Sharpe 95% Range (high)": stats["sharpe_ci_high"],
+            "Sharpe 95% Range": (stats["sharpe_ci_low"], stats["sharpe_ci_high"]),
             "Probability Sharpe Above 0": stats["probabilistic_sharpe_ratio"],
-            "Days Needed To Confirm Sharpe": stats["minimum_track_record_length"],
         }
 
         if self.bench_daily is not None:
@@ -410,13 +377,11 @@ class Report:
                 "Alpha (annualized)": stats["alpha"],
                 "Beta": stats["beta"],
                 "Correlation": stats["correlation"],
-                "R-Squared": stats["r_squared"],
                 "Tracking Error (annualized)": stats["tracking_error"],
                 "Information Ratio": stats["information_ratio"],
                 "Excess Return (annualized)": stats["excess_return"],
                 "Up Capture": stats["up_capture"],
                 "Down Capture": stats["down_capture"],
-                "Days Beating Benchmark": stats["outperformance_share"],
             })
         return out
 
@@ -461,7 +426,7 @@ class Report:
             results["cost"] = metrics.cost_summary(fills, self.funding, equity, years)
         if self.account_history is not None:
             results["exposure"] = metrics.exposure_summary(
-                self.account_history, self.position_history, self.round_trips)
+                self.account_history, self.position_history)
         if self.orders is not None:
             results["order"] = metrics.order_summary(self.orders)
 

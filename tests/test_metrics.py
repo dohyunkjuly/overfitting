@@ -409,14 +409,16 @@ def test_minimum_track_record_length_is_undefined_below_the_threshold():
 
 # -------------------------------------------------------- summary and edges ---
 
-def test_summary_contains_every_scalar_metric():
+def test_summary_contains_the_headline_metrics():
     result = m.summary(MIXED, periods_per_year=4)
 
     assert result["total_return"] == approx(0.1286)
     assert result["max_drawdown"] == approx(-0.1)
     assert result["periods"] == 4
     assert "alpha" not in result
-    assert len(result) >= 45
+    for key in ("sharpe_ratio", "sortino_ratio", "value_at_risk_95", "ulcer_index",
+                "sharpe_ci_low", "sharpe_ci_high", "probabilistic_sharpe_ratio"):
+        assert key in result
 
 
 def test_summary_adds_benchmark_metrics_when_given_one():
@@ -424,7 +426,7 @@ def test_summary_adds_benchmark_metrics_when_given_one():
 
     assert result["beta"] == approx(2)
     for key in ("alpha", "correlation", "tracking_error", "information_ratio",
-                "up_capture", "down_capture", "outperformance_share"):
+                "up_capture", "down_capture"):
         assert key in result
 
 
@@ -496,23 +498,14 @@ def test_win_loss_sizes_and_ratios():
     assert s["gross_profit"] == 60 and s["gross_loss"] == -30 and s["net_profit"] == 30
 
 
-def test_expectancy_in_currency_and_in_r():
-    s = m.trade_summary(TRIPS)
-    r = np.array([30, -10, 10, -20, 20]) / 15
-
-    assert s["expectancy"] == approx(6)
-    assert s["expectancy_r"] == approx(r.mean())
-    assert s["system_quality_number"] == approx(math.sqrt(5) * r.mean() / r.std(ddof=1))
-    assert s["average_return"] == approx(0.06)
-    assert s["average_winning_return"] == approx(0.2)
-    assert s["average_losing_return"] == approx(-0.15)
+def test_expectancy():
+    assert m.trade_summary(TRIPS)["expectancy"] == approx(6)
 
 
 def test_holding_times_and_streaks():
     s = m.trade_summary(TRIPS)
 
-    assert s["average_bars_held"] == approx(6) and s["median_bars_held"] == 6
-    assert s["longest_bars_held"] == 10
+    assert s["average_bars_held"] == approx(6)
     assert s["average_bars_held_winners"] == approx(8)
     assert s["average_bars_held_losers"] == approx(3)
     assert s["longest_winning_streak"] == 1 and s["longest_losing_streak"] == 1
@@ -526,7 +519,6 @@ def test_profit_concentration():
     s = m.trade_summary(TRIPS)
 
     assert s["profit_from_best_trade"] == approx(30 / 30)
-    assert s["profit_from_best_5_trades"] == approx(1.0)
     assert s["net_profit_without_best_5"] == approx(0)
 
     many = round_trips([("LONG", pnl, 100, 100, 1, 0, 0) for pnl in (100, 5, 5, 5, 5, 5, 5, -10)])
@@ -553,14 +545,9 @@ def test_trade_summary_without_trades_or_losses():
 
 def test_quality_summary():
     s = m.quality_summary(TRIPS)
-    price_returns = np.array([0.30, -0.10, 0.10, -0.20, 0.20])
-    mfe = np.array([0.40, 0.01, 0.15, 0.02, 0.22])
 
     assert s["average_adverse_excursion"] == approx(-0.09)
     assert s["average_favourable_excursion"] == approx(0.16)
-    assert s["edge_ratio"] == approx(0.16 / 0.09)
-    assert s["profit_captured"] == approx(price_returns.sum() / mfe.sum())
-    assert s["average_profit_given_back"] == approx((mfe - price_returns).mean())
     assert s["liquidations"] == 0
     assert m.quality_summary(NO_TRIPS)["liquidations"] == 0
 
@@ -584,17 +571,14 @@ def test_cost_summary_adds_up():
     assert s["total_costs"] == approx(4.4 + 4.0 + 1.0)
     assert s["profit_before_costs"] == approx(40)         # 2 * (120 - 100) at clean prices
     assert s["cost_share"] == approx(9.4 / 40)
-    assert s["average_cost_per_fill"] == approx(4.7)
     assert s["traded_value"] == approx(2 * 101 + 2 * 119)
     assert s["turnover"] == approx(440 / (1_000 * 0.5))
-    # net is 30.6; commission could be (30.6 + 4.4) / 4.4 times larger before it is gone
-    assert s["break_even_commission"] == approx(35 / 4.4)
 
 
 def test_cost_summary_edge_cases():
     assert m.cost_summary(pd.DataFrame())["total_commission"] == 0
     losing = m.cost_summary(fills([(1, 100, 0, 1, 0), (-1, 90, -10, 1, 0)]))
-    assert math.isnan(losing["break_even_commission"]) and math.isnan(losing["cost_share"])
+    assert math.isnan(losing["cost_share"])
     assert math.isnan(losing["turnover"])
 
 
@@ -619,7 +603,6 @@ def test_exposure_summary():
     assert s["average_margin_usage"] == approx((0.5 + 500 / 1_100) / 4)
     assert s["peak_margin_usage"] == approx(0.5)
     assert s["closest_distance_to_liquidation"] == approx(0.20)
-    assert s["average_distance_to_liquidation"] == approx((0.20 + 30 / 110) / 2)
 
 
 def test_distance_to_liquidation_for_a_short():
@@ -629,7 +612,6 @@ def test_distance_to_liquidation_for_a_short():
     s = m.exposure_summary(account, {"BTC": position})
 
     assert s["closest_distance_to_liquidation"] == approx(0.25)
-    assert s["average_net_exposure"] == approx(-1.0)
 
 
 def test_exposure_summary_when_never_in_the_market():

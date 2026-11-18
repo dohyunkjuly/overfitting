@@ -15,6 +15,7 @@
 
 ### Changed
 
+- **Shorter printed summary.** About 120 lines down to 87. Dropped duplicates (Annualized Mean Return, Sharpe standard error, R-squared, percentage versions of average win and loss, Average Net Exposure, Average Distance to Liquidation, Liquidation Loss), niche numbers (Kelly fraction, Expectancy (R), System Quality Number, Days Needed To Confirm Sharpe, autocorrelation, Pain Index, Martin ratio, 99% VaR and Expected Shortfall, average drawdown duration and recovery time, median and longest holding time, Days Beating Benchmark) and made-up ones (drawdown counts by depth, Profit From Best 5 Trades, Profit Captured, Average Profit Given Back, Break-Even Commission Multiple, Average Cost per Fill, Edge Ratio). The Sharpe confidence interval is one line, "Sharpe 95% Range  0.05 to 2.89". Standard functions such as `kelly_fraction()` and `minimum_track_record_length()` stay in `overfitting.analysis.metrics`; `metrics.summary()` returns what the report prints, and `exposure_summary()` no longer takes `round_trips`.
 - Backtests run faster: reading indicators inside `next()` and building the returns series do less work. The SMA example went from about 90 ms to 68 ms per run, and to 47 ms with `record=False`. Results are unchanged.
 
 ## 0.5.0 (2026-11-18)
