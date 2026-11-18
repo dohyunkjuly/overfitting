@@ -2,11 +2,10 @@ import pandas as pd
 from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
 from overfitting.data import Data
-from overfitting.order import Order
+from overfitting.order import Order, OrderType, Status
 from overfitting.position import Position
 from overfitting.slippage import Bar, resolve as resolve_slippage
 from overfitting.recorder import NullRecorder, Recorder
-from overfitting.types import OrderType, Status
 import warnings
 from overfitting.errors import (
     EmptyOrderParameters,
@@ -130,10 +129,10 @@ class Broker:
             raise InvalidOrderParameters(f"Invalid Order Type - {type}")
         
         if type == OrderType.STOP and stop_price is None:
-            raise EmptyOrderParameters("stop_price must be specficed for STOP order")
+            raise EmptyOrderParameters("stop_price must be given for a STOP order.")
         
         if type == OrderType.LIMIT and price is None:
-            raise EmptyOrderParameters("price must be specifed for LIMIT order")
+            raise EmptyOrderParameters("price must be given for a LIMIT order.")
 
         timestamp = pd.to_datetime(self.data.index[self._i])
         order = Order(timestamp, symbol, qty, price, type, stop_price, label)
@@ -304,7 +303,7 @@ class Broker:
         order.executed_price = self._slippage(symbol, order)
 
         if not order.theoretical_price:
-            raise EmptyOrderParameters("Cannot Exeucte Orders without Price. Please check the order")
+            raise EmptyOrderParameters("Cannot execute an order without a price.")
         
         position = self.position[symbol]
 

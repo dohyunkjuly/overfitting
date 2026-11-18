@@ -8,9 +8,8 @@ import pytest
 
 from overfitting.broker import Broker
 from overfitting.data import Data
-from overfitting.order import Order
+from overfitting.order import Order, OrderType
 from overfitting.position import Position
-from overfitting.types import OrderType
 
 SYMBOL = "BTC"
 START = "2024-01-01"

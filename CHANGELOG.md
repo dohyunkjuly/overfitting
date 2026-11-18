@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Market data download.** `overfitting.market.load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance")` downloads candles and funding rates from Binance, Bybit or OKX and returns `{symbol: DataFrame}` ready for a Strategy, with funding on the bar it is paid at. Data is saved as Parquet files under `~/.overfitting/data` (or `OVERFITTING_DATA_DIR`), one per symbol and month (below 1h) or year, so later calls only download what is missing, and interrupted downloads resume. A catalog (`catalog.sqlite`) records what is held and logs every download; `stored()` and `downloads()` show them. Files deleted by hand are downloaded again, and valid Parquet files added by hand are used. The connectors use only the Python standard library; storage adds one dependency, `pyarrow`.
 - **Parameter optimizer.** `optimize(MyStrategy, data, params={...}, maximize="sharpe_ratio")` runs a grid or random search over a strategy's parameters, in parallel on macOS and Linux. By default the search only sees the first 70% of the data, and the result shows the winner's metrics on the held-out 30% next to its train metrics, with the number of trials. `result.table` lists every combination and `result.heatmap(x, y)` gives a grid of two parameters.
 - **Strategy parameters.** Parameters are class attributes; `MyStrategy(data, params={"fast": 10})` overrides them for one run.
 - `Strategy(record=False)` skips recording round trips and per-bar history, for runs where only the returns matter.
@@ -11,10 +12,13 @@
 
 ### Removed
 
+- The module `overfitting.types`. `OrderType` and `Status` now live in `overfitting.order` with `Order`: `from overfitting.order import OrderType`. Orders also accept the type as a string, e.g. `type="LIMIT"`.
+- `CustomError` and the unused `InvalidOrderType` from `overfitting.errors`. Every error now derives from the new `OverfittingError`, so `except OverfittingError` catches anything the library raises; messages containing `{` or `}` no longer break when printed. `EmptyOrderParameters` is now a kind of `InvalidOrderParameters`.
 - **The deprecated indicator and slippage API.** `Strategy.indicator()`, the indicator classes (`Indicator`, `SMA`, `EMA`, `WMA`, `RSI`, `MACD`, `Stochastic`, `BollingerBands`, `ATR`), the `slippage_model=` argument and `Slippage.FixedPercent / Skewed / Zero` are gone, earlier than the 1.0 announced in 0.5.0. Use `self.I(sma, close, 20)` with the functions in `overfitting.indicators`, and `slippage=0.001` or a function `(order, bar) -> price`.
 
 ### Changed
 
+- New dependency: `pyarrow`, for the Parquet files of downloaded data.
 - **Shorter printed summary.** About 120 lines down to 87. Dropped duplicates (Annualized Mean Return, Sharpe standard error, R-squared, percentage versions of average win and loss, Average Net Exposure, Average Distance to Liquidation, Liquidation Loss), niche numbers (Kelly fraction, Expectancy (R), System Quality Number, Days Needed To Confirm Sharpe, autocorrelation, Pain Index, Martin ratio, 99% VaR and Expected Shortfall, average drawdown duration and recovery time, median and longest holding time, Days Beating Benchmark) and made-up ones (drawdown counts by depth, Profit From Best 5 Trades, Profit Captured, Average Profit Given Back, Break-Even Commission Multiple, Average Cost per Fill, Edge Ratio). The Sharpe confidence interval is one line, "Sharpe 95% Range  0.05 to 2.89". Standard functions such as `kelly_fraction()` and `minimum_track_record_length()` stay in `overfitting.analysis.metrics`; `metrics.summary()` returns what the report prints, and `exposure_summary()` no longer takes `round_trips`.
 - Backtests run faster: reading indicators inside `next()` and building the returns series do less work. The SMA example went from about 90 ms to 68 ms per run, and to 47 ms with `record=False`. Results are unchanged.
 

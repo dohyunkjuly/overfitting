@@ -14,7 +14,7 @@ from overfitting.errors import (
     InvalidOrderParameters,
     StopOrderRejected,
 )
-from overfitting.types import OrderType
+from overfitting.order import OrderType
 
 # (open, high, low, close)
 QUIET = (100, 110, 95, 105)

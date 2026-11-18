@@ -5,9 +5,8 @@ import pandas as pd
 import pytest
 
 from conftest import SYMBOL, fill
-from overfitting.order import Order
+from overfitting.order import Order, OrderType
 from overfitting.position import Position
-from overfitting.types import OrderType
 
 
 def test_new_position_is_flat(position):

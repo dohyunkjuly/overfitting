@@ -1,8 +1,22 @@
 import uuid
 from decimal import Decimal
 from enum import Enum
+
 import pandas as pd
-from overfitting.types import OrderType, Status
+
+
+class OrderType(Enum):
+    LIMIT = 0
+    MARKET = 1
+    STOP = 2
+
+
+class Status(Enum):
+    OPEN = 0
+    FILLED = 1
+    REJECTED = 2
+    CANCELLED = 3
+
 
 class Order:
     def __init__(self,
