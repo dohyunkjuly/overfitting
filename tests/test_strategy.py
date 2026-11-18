@@ -6,7 +6,6 @@ import pytest
 
 from conftest import make_frame
 from overfitting import Strategy
-from overfitting.indicators import SMA
 
 # Opens: 100, 110, 120, 130, 140
 RALLY = [(100 + 10 * i, 105 + 10 * i, 95 + 10 * i, 102 + 10 * i) for i in range(5)]
@@ -219,35 +218,12 @@ def test_val_reads_any_column_and_rejects_unknown_ones():
         strategy.val("BTC", 2, "funding")
 
 
-def test_old_indicator_classes_still_work_with_a_warning():
-    strategy, _ = run({})
-    with pytest.warns(DeprecationWarning):
-        sma = strategy.indicator(SMA, "BTC", window=2)
-
-    # The old classes shift one bar, so the value at bar i only uses closes before i.
-    assert pd.isna(sma[0]) and pd.isna(sma[1])
-    assert sma[2] == pytest.approx((102 + 112) / 2)
-    assert sma.ready(2) and not sma.ready(1)
-
-
-def test_old_indicator_source_and_bad_arguments():
-    strategy, _ = run({})
-    with pytest.warns(DeprecationWarning):
-        sma_high = strategy.indicator(SMA, "BTC", source="high", window=2)
-        assert sma_high[2] == pytest.approx((105 + 115) / 2)
-        with pytest.raises(ValueError):
-            strategy.indicator(SMA, "BTC", source="vwap")
-        with pytest.raises(TypeError):
-            strategy.indicator(SMA, "BTC", windw=2)
-
-
-def test_slippage_argument_and_its_deprecated_name():
+def test_slippage_argument():
     frame = make_frame(RALLY)
     assert Scripted(data={"BTC": frame}, slippage=0.01).broker.slippage is not None
     assert Scripted(data={"BTC": frame}).broker.slippage is None
-    with pytest.warns(DeprecationWarning):
-        old = Scripted(data={"BTC": frame}, slippage_model=lambda order, bar: 1.0)
-    assert old.broker.slippage is not None
+    with pytest.raises(TypeError):
+        Scripted(data={"BTC": frame}, slippage_model=0.01)     # the old name is gone
 
 
 # ------------------------------------------------------- multiple symbols ---

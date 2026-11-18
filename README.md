@@ -267,7 +267,7 @@ def next(self):
 - Built in: `sma`, `ema`, `wma`, `rsi`, `macd`, `stochastic`, `bollinger`, `atr`, `donchian`.
 - A custom indicator is any function of the same shape; see `examples/donchian_breakout.py`.
 
-`next(self, i)` with the bar index is still supported. The class-based indicators (`SMA`, `EMA`, ...) and `self.indicator(...)` still work but are deprecated.
+`next(self, i)` with the bar index is also supported.
 
 ## Slippage
 
@@ -280,7 +280,7 @@ MyStrategy(data, slippage=skewed(0.15))      # slips 15% of the way from the ope
 MyStrategy(data, slippage=lambda order, bar: order.theoretical_price + 0.5)   # your own model
 ```
 
-A slippage model is a function `(order, bar) -> executed price`. `order.qty` is positive for a buy, and `bar` has `open`, `high`, `low` and `close`. `slippage_model=` and `Slippage.FixedPercent(f=...)` still work but are deprecated.
+A slippage model is a function `(order, bar) -> executed price`. `order.qty` is positive for a buy, and `bar` has `open`, `high`, `low` and `close`.
 
 ## Parameter Optimization
 
@@ -501,7 +501,7 @@ You can simply test multiple currencies by passing data as dict[str, pd.DataFram
 
 ## Upcoming Features
 
-- **Parameter Optimizer**  
-  A simple optimizer to help find the best-performing strategy parameters (like SMA windows, thresholds, etc.) based on backtest results.
+- **Overfitting checks**  
+  Deflated Sharpe ratio, walk-forward testing and a random-entry baseline, to tell whether a backtest result is likely to hold up.
 
 > 💡 Got feedback or suggestions? Feel free to open an issue or contribute via pull request.

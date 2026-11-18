@@ -18,10 +18,9 @@ Pass one to a strategy as `slippage=`:
 from __future__ import annotations
 
 import numbers
-import warnings
 from typing import Callable, NamedTuple, Optional
 
-__all__ = ["Bar", "fixed_percent", "skewed", "resolve", "Slippage"]
+__all__ = ["Bar", "fixed_percent", "skewed", "resolve"]
 
 
 class Bar(NamedTuple):
@@ -73,27 +72,3 @@ def resolve(slippage) -> Optional[SlippageFunction]:
         "slippage must be a number, a function (order, bar) -> price, or None; "
         f"got {type(slippage).__name__}."
     )
-
-
-class Slippage:
-    """Deprecated: use `slippage=0.001`, `fixed_percent(rate)` or `skewed(fraction)`."""
-
-    @staticmethod
-    def _warn(replacement: str) -> None:
-        warnings.warn(f"Slippage.* is deprecated, use {replacement}.", DeprecationWarning,
-                      stacklevel=3)
-
-    @staticmethod
-    def Zero() -> SlippageFunction:
-        Slippage._warn("slippage=None")
-        return fixed_percent(0.0)
-
-    @staticmethod
-    def Skewed(f: float = 0.15) -> SlippageFunction:
-        Slippage._warn("overfitting.slippage.skewed(fraction)")
-        return skewed(f)
-
-    @staticmethod
-    def FixedPercent(f: float = 0.01) -> SlippageFunction:
-        Slippage._warn("slippage=<rate>")
-        return fixed_percent(f)

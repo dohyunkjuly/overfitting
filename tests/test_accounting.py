@@ -2,7 +2,6 @@
 import pytest
 
 from conftest import SYMBOL, make_broker
-from overfitting import Slippage
 from overfitting.slippage import Bar, fixed_percent, resolve, skewed
 
 RATE = 0.001
@@ -208,18 +207,6 @@ def test_slippage_function_receives_the_bar_by_name():
 def test_invalid_slippage_is_rejected():
     with pytest.raises(TypeError):
         make_broker([(100, 110, 90, 105)], slippage="a lot")
-
-
-def test_old_slippage_factories_still_work_with_a_warning():
-    with pytest.warns(DeprecationWarning):
-        model = Slippage.FixedPercent(f=0.01)
-    broker = make_broker([(100, 110, 90, 105)], slippage=model)
-    assert market(broker, 1)["executed_price"] == pytest.approx(101)
-
-    with pytest.warns(DeprecationWarning):
-        assert Slippage.Skewed(f=0.5) is not None
-    with pytest.warns(DeprecationWarning):
-        assert Slippage.Zero() is not None
 
 
 # ----------------------------------------------------- broker bookkeeping ---

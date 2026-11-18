@@ -9,6 +9,10 @@
 - `Strategy(record=False)` skips recording round trips and per-bar history, for runs where only the returns matter.
 - `Strategy` accepts an already prepared `Data` object, so many runs can share one.
 
+### Removed
+
+- **The deprecated indicator and slippage API.** `Strategy.indicator()`, the indicator classes (`Indicator`, `SMA`, `EMA`, `WMA`, `RSI`, `MACD`, `Stochastic`, `BollingerBands`, `ATR`), the `slippage_model=` argument and `Slippage.FixedPercent / Skewed / Zero` are gone, earlier than the 1.0 announced in 0.5.0. Use `self.I(sma, close, 20)` with the functions in `overfitting.indicators`, and `slippage=0.001` or a function `(order, bar) -> price`.
+
 ### Changed
 
 - Backtests run faster: reading indicators inside `next()` and building the returns series do less work. The SMA example went from about 90 ms to 68 ms per run, and to 47 ms with `record=False`. Results are unchanged.

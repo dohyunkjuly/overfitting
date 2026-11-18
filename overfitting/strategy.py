@@ -3,17 +3,14 @@ import os
 import pandas as pd
 import numpy as np
 from abc import abstractmethod
-from typing import List, Optional, Dict, Type
+from typing import Dict, Optional
 from overfitting.data import Data
 from overfitting.broker import Broker
 from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.analysis.report import Report
-import warnings
 from types import SimpleNamespace
-from overfitting.indicators import Indicator, Line, Lines
-
-_OHLCV_NAMES = ("open", "high", "low", "close", "volume")
+from overfitting.indicators import Line, Lines
 
 class Strategy:
     def __init__(self,
@@ -25,7 +22,6 @@ class Strategy:
                  maint_margin_rate: float =0.005,
                  maint_amount: float=0,
                  slippage=None,
-                 slippage_model=None,
                  params: Optional[dict] = None,
                  record: bool = True):
         """
@@ -38,14 +34,7 @@ class Strategy:
             round trips, account and positions come back empty.
         slippage: a number (0.001 means every fill is 0.1% worse), a function
             `(order, bar) -> executed price`, or None. See overfitting.slippage.
-        slippage_model: deprecated name for `slippage`.
         """
-        if slippage_model is not None:
-            warnings.warn("slippage_model= is deprecated, use slippage=.", DeprecationWarning,
-                          stacklevel=2)
-            if slippage is None:
-                slippage = slippage_model
-
         for name, value in (params or {}).items():
             if not hasattr(type(self), name):
                 raise AttributeError(
@@ -255,45 +244,6 @@ class Strategy:
             return pd.Series(arr, name=name)
         return arr[i]
 
-    def indicator(self, cls: Type[Indicator], symbol: str, *, source: str = "close", **kwargs) -> Indicator:
-        """
-        Deprecated: use `self.I(function, series, ...)` with the functions in
-        overfitting.indicators.
-
-        Build an indicator by binding the symbol's OHLCV series to ``cls``'s constructor.
-
-        - Constructor params named one of ``open / high / low / close / volume``
-          are filled with the matching series for ``symbol``.
-        - A param named ``series`` is filled with the ``source`` column
-          (default ``"close"``; override per-call with ``source=`` ).
-        - Any other kwargs are forwarded as-is.
-        """
-        warnings.warn("Strategy.indicator() is deprecated, use Strategy.I().", DeprecationWarning,
-                      stacklevel=2)
-        sig = inspect.signature(cls.__init__)
-        bound = {}
-
-        for name, param in sig.parameters.items():
-            if name == "self":
-                continue
-            if name in _OHLCV_NAMES:
-                bound[name] = self._ohlcv(symbol, name, None)
-            elif name == "series":
-                if source not in _OHLCV_NAMES:
-                    raise ValueError(
-                        f"source={source!r} must be one of {_OHLCV_NAMES}"
-                    )
-                bound[name] = self._ohlcv(symbol, source, None)
-            elif name in kwargs:
-                bound[name] = kwargs.pop(name)
-            # else: rely on the indicator's default
-
-        if kwargs:
-            raise TypeError(
-                f"{cls.__name__}: unexpected keyword arguments {list(kwargs)}"
-            )
-
-        return cls(**bound)
 
     def bars(self, symbol: str, i: int) -> tuple:
         """

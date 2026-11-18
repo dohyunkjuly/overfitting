@@ -6,8 +6,8 @@ import pytest
 from conftest import make_frame
 from overfitting import Strategy
 from overfitting.indicators import (
-    ATR, EMA, MACD, RSI, SMA, WMA, BollingerBands, Line, Lines, Stochastic, atr, bollinger,
-    crossover, crossunder, donchian, ema, macd, rsi, sma, stochastic, wma,
+    Line, Lines, atr, bollinger, crossover, crossunder, donchian, ema, macd, rsi, sma,
+    stochastic, wma,
 )
 
 approx = pytest.approx
@@ -261,35 +261,3 @@ def test_new_style_strategy_trades_on_crossovers():
     assert len(fills) == 1
     assert fills.loc[0, "executed_at"] == pd.Timestamp("2024-01-01 07:00")
     assert fills.loc[0, "executed_price"] == 9
-
-
-def test_new_style_matches_the_old_shifted_classes():
-    # sma[-1] inside next() at bar i equals the old SMA[i], which was shifted by one bar.
-    old, new = [], []
-
-    def init(self):
-        self.new = self.I(sma, self.data["BTC"].close, 3)
-        with pytest.warns(DeprecationWarning):
-            self.old = self.indicator(SMA, "BTC", window=3)
-
-    def next_(self, i):
-        old.append(self.old[i])
-        new.append(self.new[-1])
-
-    strategy_with(init, next_).run()
-    assert new == approx(old, nan_ok=True)
-
-
-# ------------------------------------------------- deprecated class wrappers ---
-
-@pytest.mark.parametrize("cls, function, args", [
-    (SMA, sma, (CLOSE, 3)), (EMA, ema, (CLOSE, 3)), (WMA, wma, (CLOSE, 3)), (RSI, rsi, (CLOSE, 3)),
-    (MACD, macd, (CLOSE, 3, 6, 2)), (BollingerBands, bollinger, (CLOSE, 4, 2.0)),
-    (Stochastic, stochastic, (HIGH, LOW, CLOSE, 3, 2, 1)), (ATR, atr, (HIGH, LOW, CLOSE, 3)),
-])
-def test_old_classes_are_the_functions_shifted_one_bar(cls, function, args):
-    old, new = cls(*args).values, function(*args).shift(1)
-    if isinstance(new, pd.DataFrame):
-        pd.testing.assert_frame_equal(old, new)
-    else:
-        pd.testing.assert_series_equal(old, new)
