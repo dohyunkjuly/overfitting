@@ -1,6 +1,6 @@
 __pycache__/
 .venv/
-*test*
+.pytest_cache/
 *.py[cod]
 /myenv
 # dependencies
@@ -18,3 +18,5 @@ dist
 *.egg-info
 .eggs/*
 __pycache__/*
+# local planning notes
+ROADMAP.md

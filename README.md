@@ -1,5 +1,7 @@
 # Overfitting (Futures Backtesting)
 
+[![Tests](https://github.com/dohyunkjuly/overfitting/actions/workflows/tests.yml/badge.svg)](https://github.com/dohyunkjuly/overfitting/actions/workflows/tests.yml)
+
 Overfitting simulates a realistic crypto futures trading environment including 
 - **Liquidation**, **Margin**, **Leverage** for stress testing
 - **Multiple Currency** Trading (e.g., backtesting BTC PERP & ETH PERP at the same time)
@@ -10,14 +12,16 @@ Overfitting simulates a realistic crypto futures trading environment including
     $ pip install overfitting
 
 ## Usage
+Run from the repository root; the example reads the sample data in `examples/data/`.
+
 ```python
 import pandas as pd
 from overfitting import Strategy
 from overfitting.indicators import SMA
 
 def load_data():
-    df = pd.read_csv('./data/BTCUSDT.csv')
-    benchamrk_df = pd.read_csv('./data/BTCUSDT.csv') # BTC buy and Hold
+    df = pd.read_csv('examples/data/BTCUSDT.csv')
+    benchamrk_df = pd.read_csv('examples/data/BTCUSDT.csv') # BTC buy and Hold
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
 

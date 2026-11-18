@@ -7,7 +7,7 @@ name = "overfitting"
 version = "0.4.2"
 description = "A Robust Futures CryptoCurrency Backtesting Library."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 
 authors = [
@@ -41,7 +41,8 @@ dependencies = [
 
 [project.optional-dependencies]
 examples = ["notebook", "ipykernel", "ipython"]
-dev = ["twine>=4.0.2"]
+test = ["pytest>=7"]
+dev = ["twine>=4.0.2", "pytest>=7"]
 
 [project.urls]
 Homepage = "https://github.com/dohyunkjuly/overfitting"
@@ -54,3 +55,9 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*", "examples*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "slow: runs a full example backtest (deselect with -m 'not slow')",
+]
