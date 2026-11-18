@@ -208,6 +208,47 @@ Worst Drawdowns
 9           1.603446 2024-02-28  2024-02-29    2024-03-04                4
 ```
 
+## Market Data
+
+`load()` downloads candles and funding rates from an exchange, saves them on your machine, and returns them ready for a backtest. Later calls read from the local copy and only download what is missing, such as bars that have closed since.
+
+```python
+from overfitting import Strategy
+from overfitting.market import load
+
+data = load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance")
+strategy = MyStrategy(data)
+```
+
+```text
+Downloading binance BTC/USDT 1h candles 2023-01-01 00:00 to 2026-11-18 21:00
+  34,029 bars saved
+Downloading binance BTC/USDT funding rates 2023-01-01 00:00 to 2026-11-18 21:00
+  4,254 funding payments saved
+Downloading binance ETH/USDT 1h candles 2023-01-01 00:00 to 2026-11-18 21:00
+  34,029 bars saved
+Downloading binance ETH/USDT funding rates 2023-01-01 00:00 to 2026-11-18 21:00
+  4,254 funding payments saved
+```
+
+Each symbol comes back as a DataFrame with `open`, `high`, `low`, `close`, `volume` and `funding_rate` (the rate paid at that bar's open, 0 on other bars), indexed by bar open time in UTC. Only bars that have closed are returned.
+
+| Argument | Meaning |
+|---|---|
+| `symbols` | `"BTC"` or a list. `"BTCUSDT"`, `"BTC/USDT"` and `"BTC-USDT-SWAP"` also work; a bare name gets `quote` (default `"USDT"`) |
+| `timeframe` | `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `12h`, `1d` |
+| `start`, `end` | Dates such as `"2023-01-01"`, in UTC. `end` defaults to now |
+| `exchange` | `"binance"`, `"bybit"` or `"okx"` (USDT-margined perpetuals) |
+| `funding` | Add the `funding_rate` column (default `True`) |
+| `data_dir` | Where the data is kept. Default `~/.overfitting/data`, or the `OVERFITTING_DATA_DIR` environment variable |
+
+- The data is kept as Parquet files outside your project and virtual environment, so every project on the machine shares it: `binance/candles/1m/BTC-USDT/2024-01.parquet` (one file per month below 1h, per year above). A year of 1-minute bars is about 15 MB and loads in a few hundredths of a second.
+- With several symbols, only the bars all of them have are kept, so their timelines match. A symbol listed later trims the others, with a warning.
+- Gaps in the exchange's own data, and funding history that starts later than the candles (OKX only serves recent funding), are reported as warnings.
+- An interrupted download resumes where it stopped.
+- A catalog (`catalog.sqlite` in the same folder) records what has been downloaded and logs every change. `overfitting.market.stored()` lists what is saved; `overfitting.market.downloads()` shows the log.
+- Files deleted by hand are downloaded again on the next `load()`. Parquet files you put in the folder yourself (named like the others, with columns `time`, `open`, `high`, `low`, `close`, `volume`) are checked and used instead of downloading. A file that fails the checks is renamed to `*.invalid` with a warning.
+
 ## Indicators
 
 An indicator is a plain function that takes price series and returns one value per bar. Declare it in `init()` with `self.I`, then read it in `next()` relative to the current bar:

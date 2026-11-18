@@ -28,3 +28,7 @@ class StopOrderRejected(CustomError):
 
 class InsufficientMargin(CustomError):
     pass
+
+
+class ExchangeError(Exception):
+    """An exchange answered with an error, or could not be reached (overfitting.market)."""
