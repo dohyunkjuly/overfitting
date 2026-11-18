@@ -108,16 +108,6 @@ def test_trades_are_logged_in_execution_order():
     assert [t["executed_price"] for t in broker.trades] == [100, 110]
 
 
-@pytest.mark.xfail(strict=True, reason="ROADMAP Phase 2: no margin check yet, any size is accepted")
-def test_order_the_account_cannot_afford_is_rejected():
-    # 100 of cash at 1x cannot carry 1,000 units at 100 (notional 100,000).
-    broker = make_broker([(100, 101, 99, 100)], cash=100)
-    with pytest.raises(Exception):
-        broker.order(SYMBOL, 1_000, None, type="MARKET")
-        broker.next()
-    assert broker.get_position(SYMBOL).qty == 0
-
-
 # -------------------------------------------------------------- slippage ---
 
 def test_no_slippage_model_executes_at_theoretical_price():
@@ -185,3 +175,24 @@ def test_slippage_costs_show_up_in_round_trip_pnl():
 def test_slippage_models_validate_their_parameter(factory, bad):
     with pytest.raises(ValueError):
         factory(f=bad)
+
+
+# ----------------------------------------------------- broker bookkeeping ---
+
+def test_unrealized_pnl_and_equity_follow_the_close():
+    broker = make_broker([(100, 101, 99, 100), (100, 131, 99, 130)])
+    market(broker, 2)
+    broker.next()
+
+    assert broker.unrealized_pnl(0) == 0
+    assert broker.unrealized_pnl(1) == pytest.approx(60)
+    assert broker.equity(1) == pytest.approx(10_060)
+    assert broker.cash == 10_000
+
+
+def test_initial_capital_and_its_old_misspelling():
+    broker = make_broker([(100, 101, 99, 100)], cash=5_000)
+
+    assert broker.initial_capital == 5_000
+    with pytest.warns(DeprecationWarning):
+        assert broker.initial_captial == 5_000

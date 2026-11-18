@@ -35,13 +35,15 @@ class Strategy:
             maint_amount=maint_amount,
             slippage_model=slippage_model
         )
-        self.balances = []
+        self.balances = []           # the curve returns are computed from
+        self.equity_curve = []       # cash + unrealized PnL at each bar's close
+        self.realized_balances = []  # cash only; moves when trades close
         self.returns= []
         self.init()
 
     def __repr__(self):
         return (f"Strategy("
-                f"initial_capital={self.broker.initial_captial}, "
+                f"initial_capital={self.broker.initial_capital}, "
                 f"commission_rate={self.broker.commission_rate}, "
                 f"balances={self.balances}, "
                 f"returns={self.returns})")
@@ -117,9 +119,21 @@ class Strategy:
 
     def get_balance(self) -> float:
         """
-        Fetch the current balance
+        Fetch the current balance (realized cash, excluding open positions)
         """
         return self.broker.cash
+
+    def get_equity(self) -> float:
+        """
+        Fetch the current balance plus unrealized PnL of open positions
+        """
+        return self.broker.equity()
+
+    def get_available_margin(self) -> float:
+        """
+        Fetch the cash that is not locked as margin in open positions
+        """
+        return self.broker.available_margin()
 
     def get_open_orders(self, symbol: str) -> Dict[str, Order]:
         """
@@ -198,27 +212,37 @@ class Strategy:
         
         return target_column[i]
 
-    def run(self) -> pd.Series:
+    def run(self, mark_to_market: bool = True) -> pd.Series:
         """
         Executes the strategy over the dataset.
 
         It handles the iteration over each time period in the data. It calls the 
         user-defined `next` method on each iteration to apply the strategy's logic. 
         Additionally, it updates account balances, and calculates the returns.
-    
+
+        Parameters
+        ----------
+        mark_to_market : bool
+            True (default): returns are based on equity, which is cash plus the
+            unrealized PnL of open positions at each bar's close.
+            False: returns are based on cash only, which moves when trades close.
+
         Returns:
             A pandas Series containing the returns, indexed by the corresponding timestamps.
         """
         t = pd.to_datetime(self.data.index)
-        b = np.zeros(len(t))
+        equity = np.zeros(len(t))
+        realized = np.zeros(len(t))
         r = np.zeros(len(t))
+        b = equity if mark_to_market else realized
 
         for i in range(len(t)):
             self.next(i)
             self.broker.next()
 
             # Update Balance
-            b[i] = self.broker.cash
+            realized[i] = self.broker.cash
+            equity[i] = self.broker.equity(i)
 
             if i > 0:
                 # Updates the Returns
@@ -226,6 +250,8 @@ class Strategy:
                 r[i] = (b[i] - pb) / pb
 
         self.balances = b.tolist()
+        self.equity_curve = equity.tolist()
+        self.realized_balances = realized.tolist()
         self.returns = r.tolist()
 
         return pd.Series(self.returns, index=t.tolist())
@@ -244,7 +270,7 @@ class Strategy:
             If None, plots will only be shown but not saved.
         """
         trades_list = self.broker.trades
-        captial = self.broker.initial_captial
+        captial = self.broker.initial_capital
 
         p = Report(
             returns_series=returns, 
@@ -265,6 +291,20 @@ class Strategy:
         """
         return pd.DataFrame(self.broker.trades)
     
+    def fetch_funding(self) -> pd.DataFrame:
+        """
+        Returns the funding payments as a pandas DataFrame, one row per payment.
+        Negative amounts were paid, positive amounts were received.
+        """
+        return pd.DataFrame(self.broker.funding_payments)
+
+    def fetch_rejected_orders(self) -> pd.DataFrame:
+        """
+        Returns orders that were dropped at fill time because the account
+        could no longer afford them.
+        """
+        return pd.DataFrame(self.broker.rejected_orders)
+
     def save_trades_to_csv(self, path='', filename="trade_history"):
         """
         Save the trade history to a CSV file.

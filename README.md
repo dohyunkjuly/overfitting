@@ -87,14 +87,14 @@ Start Date           2023-01-01 00:00:00
 End Date             2024-08-29 00:00:00
 Initial Balance         100,000.00000000
 Final Balance           205,328.91120000
-CAGR                          0.52684228
+CAGR                          0.54238181
 Cumulative Return             2.05328911
-Sharpe Ratio                  1.24678659
-Sortino Ratio                 3.54979579
-Max Drawdown                 -0.26332695
-Daily Value At Risk          -0.04147282
-Skew                          0.44515551
-Kurtosis                      2.66444346
+Sharpe Ratio                  1.47036287
+Sortino Ratio                 2.79869052
+Max Drawdown                 -0.26533797
+Daily Value At Risk          -0.03329469
+Skew                          0.72604283
+Kurtosis                      2.82598628
 Total Trades                182.00000000
 Winning Trades               69.00000000
 Losing Trades               113.00000000
@@ -106,16 +106,16 @@ Avg Return (%)                0.38834383
 Avg Profit (%)                3.54140613
 Avg Loss (%)                 -1.53697740
   Net drawdown in %  Peak date Valley date Recovery date Duration
-0         26.332695 2024-03-13  2024-06-30           NaT      NaN
-1         19.678014 2023-03-20  2023-09-07    2023-10-26      159
-2          6.297244 2023-12-07  2024-01-24    2024-02-14       50
-3          5.585429 2023-01-22  2023-02-14    2023-02-17       20
-4          3.898568 2023-02-17  2023-03-11    2023-03-15       19
-5          3.336877 2023-11-12  2023-11-18    2023-12-07       19
-6          2.699556 2024-02-20  2024-02-26    2024-03-01        9
-7          0.767196 2024-03-01  2024-03-03    2024-03-06        4
-8          0.324161 2023-01-03  2023-01-07    2023-01-18       12
-9          0.019817 2023-11-03  2023-11-04    2023-11-07        3
+0         26.533797 2024-03-13  2024-06-28           NaT      NaN
+1         20.996185 2023-03-17  2023-09-12    2023-10-23      157
+2          7.051091 2023-12-05  2024-01-22    2024-02-09       49
+3          5.980692 2023-01-21  2023-02-13    2023-02-15       18
+4          5.578214 2023-02-15  2023-03-07    2023-03-12       18
+5          5.550106 2024-03-04  2024-03-06    2024-03-11        6
+6          4.538401 2023-11-10  2023-11-16    2023-12-04       17
+7          2.530832 2023-11-01  2023-11-03    2023-11-09        7
+8          2.162228 2024-02-18  2024-02-23    2024-02-27        7
+9          1.603446 2024-02-28  2024-02-29    2024-03-04        4
 ```
 
 ## Performance Visualizations Examples
@@ -135,7 +135,35 @@ The liquidation logic is based on **isolated margin mode**:
     - Long Position Liquidation Price => Entry Price - (Initial Margin - Maintenance Margin)
     - Short Position Liquidation Price => Entry Price + (Initial Margin - Maintenance Margin)
 
-When the price crosses the calculated liquidation level, the position is force-closed and the **entire margin is lost**.
+When the price crosses the calculated liquidation level, the position is force-closed and the **entire initial margin is lost**. Nothing more is charged on top, so an isolated position can never lose more than the margin posted for it. Liquidations are marked in the trade log with `is_liquidation_order = True`.
+
+## Margin Check
+
+An order that opens or increases a position needs `price × quantity / leverage` of free margin, where free margin is the cash balance minus the margin locked in open positions.
+
+- If the account cannot afford the order when it is placed, `InsufficientMargin` is raised.
+- If the account can no longer afford a resting order when it fills, the order is dropped and listed in `strategy.fetch_rejected_orders()`.
+- Orders that reduce or close a position are always accepted.
+
+## Equity Curve
+
+`strategy.run()` returns are based on **equity**: cash plus the unrealized PnL of open positions, marked at each bar's close. Drawdown and Sharpe therefore include losses on positions that are still open.
+
+```python
+returns = strategy.run()                       # mark-to-market (default)
+returns = strategy.run(mark_to_market=False)   # realized only: moves when trades close
+
+strategy.equity_curve        # cash + unrealized PnL per bar
+strategy.realized_balances   # cash per bar
+```
+
+## Funding Rate
+
+Add a `funding_rate` column to a symbol's DataFrame to simulate funding. A non-zero value on a bar means funding is settled at that bar's open, on the position held into it:
+
+    payment = -position quantity × open price × funding rate
+
+Longs pay and shorts receive when the rate is positive. Bars with `0` or `NaN` settle nothing. Payments change the cash balance and are listed in `strategy.fetch_funding()`.
 
 ## Supported Order Types
 Supports four order types: LIMIT, MARKET, STOP LIMIT, and STOP MARKET. Each behaves according to standard trading conventions.

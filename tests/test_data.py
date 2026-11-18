@@ -41,13 +41,21 @@ def test_timestamp_column_formats(timestamps):
     assert pd.Timestamp(data.index[2]) == pd.Timestamp("2024-01-01 02:00")
 
 
-@pytest.mark.xfail(strict=True, reason="Data._to_datetime_ns calls Series.tz_localize, which fails and leaves the timezone on")
 def test_timezone_is_dropped():
     frame = make_frame(BARS)
     frame.index = frame.index.tz_localize("UTC")
     data = Data({"BTC": frame})
 
     assert pd.Timestamp(data.index[0]) == pd.Timestamp("2024-01-01 00:00")
+
+
+def test_timezone_is_dropped_from_a_timestamp_column():
+    frame = make_frame(BARS).reset_index(drop=True)
+    frame["timestamp"] = pd.date_range("2024-01-01", periods=3, freq="h", tz="Asia/Seoul")
+    data = Data({"BTC": frame})
+
+    assert pd.Timestamp(data.index[0]) == pd.Timestamp("2024-01-01 00:00")
+    assert data.index.dtype.kind == "M"  # plain numpy datetimes, which carry no timezone
 
 
 def test_multiple_symbols_share_one_timeline():

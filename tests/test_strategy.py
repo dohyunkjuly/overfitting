@@ -25,12 +25,12 @@ class Scripted(Strategy):
             action(self)
 
 
-def run(actions, bars=RALLY, symbols=("BTC",), **kwargs):
+def run(actions, bars=RALLY, symbols=("BTC",), mark_to_market=True, **kwargs):
     cls = type("Case", (Scripted,), {"actions": actions})
     kwargs.setdefault("commission_rate", 0.0)
     kwargs.setdefault("initial_capital", 10_000)
     strategy = cls(data={s: make_frame(bars) for s in symbols}, **kwargs)
-    returns = strategy.run()
+    returns = strategy.run(mark_to_market=mark_to_market)
     return strategy, returns
 
 
@@ -53,22 +53,62 @@ def test_idle_strategy_has_flat_balance_and_zero_returns():
     assert strategy.fetch_trades().empty
 
 
-def test_buy_then_sell_books_profit_on_the_closing_bar():
-    strategy, returns = run({
-        0: lambda s: s.market_order("BTC", 1),   # buys at 100
-        3: lambda s: s.market_order("BTC", -1),  # sells at 130
-    })
+BUY_THEN_SELL = {
+    0: lambda s: s.market_order("BTC", 1),   # buys at 100
+    3: lambda s: s.market_order("BTC", -1),  # sells at 130
+}
+
+
+def test_equity_curve_marks_open_positions_at_each_close():
+    # Closes are 102, 112, 122 while long from 100; sold at 130 on bar 3.
+    strategy, returns = run(BUY_THEN_SELL)
+
+    assert strategy.balances == [10_002, 10_012, 10_022, 10_030, 10_030]
+    assert strategy.equity_curve == strategy.balances
+    assert returns.iloc[1] == pytest.approx(10 / 10_002)
+    assert returns.iloc[4] == 0
+
+
+def test_realized_only_curve_books_profit_on_the_closing_bar():
+    strategy, returns = run(BUY_THEN_SELL, mark_to_market=False)
 
     assert strategy.balances == [10_000, 10_000, 10_000, 10_030, 10_030]
     assert returns.iloc[3] == pytest.approx(30 / 10_000)
-    assert returns.iloc[4] == 0
     assert strategy.get_balance() == 10_030
+
+
+def test_both_curves_are_always_recorded_and_end_equal_when_flat():
+    strategy, _ = run(BUY_THEN_SELL)
+
+    assert strategy.realized_balances == [10_000, 10_000, 10_000, 10_030, 10_030]
+    assert strategy.equity_curve[-1] == strategy.realized_balances[-1]
+
+
+def test_equity_curve_marks_short_positions():
+    strategy, _ = run({0: lambda s: s.market_order("BTC", -1)})  # short from 100
+
+    assert strategy.equity_curve == [9_998, 9_988, 9_978, 9_968, 9_958]
+    assert strategy.get_equity() == 9_958
+    assert strategy.get_balance() == 10_000
+
+
+def test_equity_curve_shows_drawdown_that_realized_curve_hides():
+    # Long from 100, dips to a close of 60, recovers, sold at 100.
+    bars = [(100, 101, 99, 100), (100, 100, 58, 60), (60, 101, 60, 100), (100, 101, 99, 100)]
+    strategy, _ = run(
+        {0: lambda s: s.market_order("BTC", 10), 3: lambda s: s.market_order("BTC", -10)},
+        bars=bars,
+    )
+
+    assert min(strategy.equity_curve) == 9_600
+    assert min(strategy.realized_balances) == 10_000
 
 
 def test_commission_reduces_balance_on_the_entry_bar():
     strategy, _ = run({0: lambda s: s.market_order("BTC", 1)}, commission_rate=0.001)
 
-    assert strategy.balances[0] == pytest.approx(10_000 - 0.1)
+    assert strategy.realized_balances[0] == pytest.approx(10_000 - 0.1)
+    assert strategy.equity_curve[0] == pytest.approx(10_000 - 0.1 + 2)  # closes at 102
 
 
 def test_default_arguments_match_the_readme():
@@ -78,14 +118,6 @@ def test_default_arguments_match_the_readme():
     assert strategy.broker.commission_rate == 0.0002
     assert strategy.broker.maint_margin_rate == 0.005
     assert strategy.broker.maint_amount == 0
-
-
-@pytest.mark.xfail(strict=True, reason="ROADMAP Phase 2: equity curve is realized-only, not mark-to-market")
-def test_equity_curve_includes_unrealized_pnl():
-    strategy, _ = run({0: lambda s: s.market_order("BTC", 1)})  # never closed
-
-    # Long 1 from 100; bar 2 closes at 122, so equity should be 10,022.
-    assert strategy.balances[2] == pytest.approx(10_022)
 
 
 # ---------------------------------------------------------- order helpers ---

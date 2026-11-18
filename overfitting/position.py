@@ -48,7 +48,9 @@ class Position:
         initial_margin = notional / self.leverage
         maint_margin = max(0.0, notional * self.maint_margin_rate - self.maint_amount)
 
-        self.margin = initial_margin + maint_margin
+        # Isolated margin: the collateral locked for this position is the
+        # initial margin. It is also the most the position can lose.
+        self.margin = initial_margin
 
         # How far the price can move against us before we get liquidated.
         # Long: liquidates when price drops by `offset`.
@@ -77,6 +79,12 @@ class Position:
         self.leverage = leverage
         self._recalc_liquidation()
 
+    def unrealized_pnl(self, price: float) -> float:
+        """Profit or loss of the open position if it were closed at `price`."""
+        if self.qty == 0:
+            return 0.0
+        return (price - self.price) * float(self.qty)
+
     def process_trade(self, order: Order, liquidation: bool = False) -> float:
         """Apply an executed order. Returns realized PnL (commission excluded)."""
         if order.symbol != self.symbol:
@@ -84,7 +92,10 @@ class Position:
         if order.qty == 0:
             raise ValueError("Order quantity cannot be zero.")
 
-        if liquidation: # Force liquidation
+        if liquidation:
+            # Forced close: the whole isolated margin is lost. The part of it
+            # still left at the liquidation price (the maintenance margin)
+            # is kept by the exchange.
             loss = -self.margin
             self._reset()
             return loss

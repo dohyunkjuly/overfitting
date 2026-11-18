@@ -251,11 +251,16 @@ def test_order_type_is_case_insensitive():
     assert order.type is OrderType.LIMIT
 
 
-@pytest.mark.xfail(strict=True, reason="Broker.order() default type is an enum but the code calls .upper() on it")
 def test_order_defaults_to_limit_when_type_omitted():
     broker = make_broker([QUIET])
     order = broker.order(SYMBOL, 1, 90)
     assert order.type is OrderType.LIMIT
+
+
+def test_order_accepts_the_enum_as_type():
+    broker = make_broker([QUIET])
+    order = broker.order(SYMBOL, 1, None, type=OrderType.MARKET)
+    assert order.type is OrderType.MARKET
 
 
 # ---------------------------------------------------- cancel and flatten ---

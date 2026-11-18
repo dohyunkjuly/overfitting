@@ -25,3 +25,6 @@ class LiquidationError(CustomError):
 
 class StopOrderRejected(CustomError):
     pass
+
+class InsufficientMargin(CustomError):
+    pass

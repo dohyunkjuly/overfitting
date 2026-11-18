@@ -61,13 +61,13 @@ class Data(dict):
 
 
     def _to_datetime_ns(self, ts: pd.Series) -> pd.Series:
-        """Coerce whatever the user gave us into tz-naive datetime64[ns]."""
+        """Coerce whatever the user gave us into tz-naive datetimes."""
         if is_datetime64_any_dtype(ts):
             dt = pd.to_datetime(ts)
-            try:
-                return dt.tz_localize(None)
-            except Exception:
-                return dt
+            if dt.dt.tz is not None:
+                # Keep the wall-clock time, drop the timezone.
+                dt = dt.dt.tz_localize(None)
+            return dt
 
         if is_integer_dtype(ts) or is_float_dtype(ts):
             # Big numbers look like milliseconds; smaller ones look like seconds.

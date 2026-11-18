@@ -69,7 +69,7 @@ def test_maint_amount_lowers_maintenance_margin():
     position.set_leverage(10)
     fill(position, 1, 20_000)
 
-    assert position.margin == pytest.approx(2_050)
+    assert position.margin == pytest.approx(2_000)
     assert position.liquid_price == pytest.approx(20_000 - 1_950)
 
 
@@ -83,11 +83,17 @@ def test_maintenance_margin_never_goes_negative():
     assert position.liquid_price == pytest.approx(90)
 
 
-def test_margin_is_initial_plus_maintenance(position):
+def test_margin_is_the_initial_margin(position):
     position.set_leverage(10)
     fill(position, 2, 100)
 
-    assert position.margin == pytest.approx(200 / 10 + 200 * MMR)
+    assert position.margin == pytest.approx(200 / 10)
+
+
+def test_margin_is_the_full_notional_at_1x(position):
+    fill(position, -2, 100)
+
+    assert position.margin == pytest.approx(200)
 
 
 def test_changing_leverage_recalculates_liquidation_price(position):
@@ -152,19 +158,35 @@ def test_no_liquidation_when_price_stays_inside():
     assert len(broker.trades) == 1
 
 
-def test_liquidation_loses_the_whole_margin():
-    # Current rule: the loss is initial margin + maintenance margin (10 + 0.5).
-    # ROADMAP Phase 2 reviews this against exchange rules.
+def test_liquidation_loses_exactly_the_initial_margin():
+    # Isolated margin: 10 was posted, so 10 is the most this position can lose.
     broker = make_broker([(100, 101, 99, 100), (100, 100, 90, 92), (92, 93, 91, 92)])
     open_position(broker, 1, 10)
     broker.next()
     broker.next()
 
-    assert broker.trades[-1]["pnl"] == pytest.approx(-10.5)
-    assert broker.cash == pytest.approx(10_000 - 10.5)
+    assert broker.trades[-1]["pnl"] == pytest.approx(-10)
+    assert broker.cash == pytest.approx(10_000 - 10)
 
 
-def test_liquidation_also_charges_commission():
+@pytest.mark.parametrize("qty, leverage, bars", [
+    (3, 5, [(100, 101, 99, 100), (100, 100, 70, 75), (75, 76, 74, 75)]),
+    (-3, 5, [(100, 101, 99, 100), (100, 130, 100, 125), (125, 126, 124, 125)]),
+    (0.5, 50, [(100, 101, 99, 100), (100, 100, 98, 99), (99, 100, 98, 99)]),
+])
+def test_liquidation_loss_equals_margin_for_any_size_and_side(qty, leverage, bars):
+    broker = make_broker(bars)
+    open_position(broker, qty, leverage)
+    margin = broker.get_position(SYMBOL).margin
+    broker.next()
+    broker.next()
+
+    assert margin == pytest.approx(abs(qty) * 100 / leverage)
+    assert broker.get_position(SYMBOL).qty == 0
+    assert broker.cash == pytest.approx(10_000 - margin)
+
+
+def test_liquidation_charges_nothing_beyond_the_margin():
     broker = make_broker(
         [(100, 101, 99, 100), (100, 100, 90, 92), (92, 93, 91, 92)],
         commission_rate=0.001,
@@ -174,9 +196,9 @@ def test_liquidation_also_charges_commission():
     broker.next()
 
     entry_fee = 100 * 0.001
-    liquidation_fee = 90.5 * 0.001
-    assert broker.trades[-1]["commission"] == pytest.approx(liquidation_fee)
-    assert broker.cash == pytest.approx(10_000 - 10.5 - entry_fee - liquidation_fee)
+    assert broker.trades[-1]["commission"] == 0
+    assert broker.trades[-1]["realized_pnl"] == pytest.approx(-10)
+    assert broker.cash == pytest.approx(10_000 - 10 - entry_fee)
 
 
 def test_liquidation_leaves_no_open_orders_behind():
@@ -205,7 +227,6 @@ def test_position_can_be_reopened_after_liquidation():
     assert position.liquid_price == pytest.approx(92 * (1 - 1 / 10 + MMR))
 
 
-@pytest.mark.xfail(strict=True, reason="ROADMAP Phase 2: liquidation flag is set on the broker, not the order")
 def test_liquidation_is_flagged_in_the_trade_log():
     broker = make_broker([(100, 101, 99, 100), (100, 100, 90, 92), (92, 93, 91, 92)])
     open_position(broker, 1, 10)
@@ -214,6 +235,25 @@ def test_liquidation_is_flagged_in_the_trade_log():
 
     assert broker.trades[0]["is_liquidation_order"] is False
     assert broker.trades[-1]["is_liquidation_order"] is True
+
+
+def test_normal_close_is_not_flagged_as_liquidation():
+    broker = make_broker([(100, 101, 99, 100), (100, 101, 99, 100)])
+    open_position(broker, 1, 10)
+    broker.order(SYMBOL, -1, None, type="MARKET")
+    broker.next()
+
+    assert [t["is_liquidation_order"] for t in broker.trades] == [False, False]
+
+
+def test_liquidation_releases_the_margin():
+    broker = make_broker([(100, 101, 99, 100), (100, 100, 90, 92), (92, 93, 91, 92)])
+    open_position(broker, 1, 10)
+    assert broker.available_margin() == pytest.approx(10_000 - 10)
+    broker.next()
+    broker.next()
+
+    assert broker.available_margin() == pytest.approx(broker.cash)
 
 
 # ------------------------------------------------- leverage change guard ---

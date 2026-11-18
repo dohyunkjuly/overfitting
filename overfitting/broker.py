@@ -6,7 +6,19 @@ from overfitting.order import Order
 from overfitting.position import Position
 from overfitting.slippage import SlippageModel
 from overfitting.types import OrderType
-from overfitting.errors import EmptyOrderParameters, InvalidOrderParameters, LiquidationError, StopOrderRejected
+import warnings
+from overfitting.errors import (
+    EmptyOrderParameters,
+    InsufficientMargin,
+    InvalidOrderParameters,
+    LiquidationError,
+    StopOrderRejected,
+)
+
+# Column in the price data that holds the funding rate, if any.
+FUNDING_COLUMN = "funding_rate"
+# Relative slack on the margin check, so float rounding never rejects an all-in order.
+MARGIN_TOLERANCE = 1e-9
 
 class Broker:
     def __init__(self,
@@ -18,8 +30,8 @@ class Broker:
                  slippage_model:SlippageModel | None):
         
         self.data = data
-        self.initial_captial = cash
-        self.cash = self.initial_captial
+        self.initial_capital = cash
+        self.cash = self.initial_capital
         self.commission_rate = commission_rate
         self.maint_margin_rate = maint_margin_rate
         self.maint_amount = maint_amount
@@ -33,11 +45,23 @@ class Broker:
         self.position: Dict[str, Position] = {} 
 
         self.trades = []
+        self.funding_payments = []
+        self.rejected_orders = []
         self._i = 0
+
+    @property
+    def initial_captial(self):
+        """Deprecated misspelling of `initial_capital`."""
+        warnings.warn(
+            "Broker.initial_captial is deprecated, use Broker.initial_capital",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.initial_capital
 
     def __repr__(self):
         return (f"Broker("
-                f"initial_capital={self.initial_captial}, "
+                f"initial_capital={self.initial_capital}, "
                 f"cash={self.cash}, "
                 f"commission_rate={self.commission_rate}, "
                 f"maint_margin_rate={self.maint_margin_rate}, "
@@ -70,7 +94,7 @@ class Broker:
               qty: float, 
               price: float, 
               *, 
-              type: str= OrderType.LIMIT, 
+              type: str = "LIMIT",
               stop_price: float= None,
               label: str=None) -> Order:       
         """
@@ -92,12 +116,10 @@ class Broker:
         if symbol not in self.open_orders:
             self.open_orders[symbol] = {}
 
-        if type.upper() == "LIMIT":
-            type = OrderType.LIMIT
-        elif type.upper() == "MARKET":
-            type = OrderType.MARKET
-        elif type.upper() == 'STOP':
-            type = OrderType.STOP
+        if isinstance(type, OrderType):
+            pass
+        elif isinstance(type, str) and type.upper() in OrderType.__members__:
+            type = OrderType[type.upper()]
         else:
             raise InvalidOrderParameters(f"Invalid Order Type - {type}")
         
@@ -118,6 +140,15 @@ class Broker:
                     f"STOP order rejected: stop price {order.stop_price} would trigger immediately at current price {open}."
                 )
     
+        # Reject orders the account cannot afford at the price we expect to pay.
+        if type == OrderType.MARKET:
+            expected_price = self._open(symbol, self._i)
+        elif price is not None:
+            expected_price = price
+        else:
+            expected_price = stop_price
+        self._check_margin(symbol, order, expected_price)
+
         # Put new order in the open_orders list if not rejected
         self.open_orders[symbol][order.id] = order
         return order
@@ -166,6 +197,83 @@ class Broker:
             raise LiquidationError(
                 f"Cannot change leverage for {symbol}. Position would be liquidated at price {lp}.")
 
+    def available_margin(self) -> float:
+        """Cash that is not locked as margin in open positions."""
+        return self.cash - sum(p.margin for p in self.position.values())
+
+    def required_margin(self, symbol: str, qty, price: float) -> float:
+        """
+        Extra margin needed to trade `qty` of `symbol` at `price`.
+        Orders that only reduce a position need none.
+        """
+        position = self.get_position(symbol)
+        qty = Decimal(str(qty))
+        new_qty = position.qty + qty
+
+        if abs(new_qty) <= abs(position.qty):
+            return 0.0  # reducing or closing
+
+        if position.qty == 0 or position.qty * qty > 0:
+            # Opening or adding: margin for the added size.
+            return float(abs(qty)) * price / position.leverage
+
+        # Flipping sides: the old margin is released, the new side needs its own.
+        new_margin = float(abs(new_qty)) * price / position.leverage
+        return max(0.0, new_margin - position.margin)
+
+    def _check_margin(self, symbol: str, order: Order, price: float) -> None:
+        required = self.required_margin(symbol, order.qty, price)
+        if required <= 0:
+            return  # reducing or closing is always allowed
+        available = self.available_margin()
+        if required > available + MARGIN_TOLERANCE * max(1.0, abs(available)):
+            raise InsufficientMargin(
+                f"Order for {float(order.qty)} {symbol} needs {required:.2f} margin "
+                f"but only {available:.2f} is available."
+            )
+
+    def unrealized_pnl(self, i: Optional[int] = None) -> float:
+        """Unrealized PnL of all open positions, marked at the close of bar `i`."""
+        if i is None:
+            i = min(self._i, len(self.data) - 1)
+        return sum(
+            p.unrealized_pnl(self._close(s, i))
+            for s, p in self.position.items() if p.qty != 0
+        )
+
+    def equity(self, i: Optional[int] = None) -> float:
+        """Cash plus unrealized PnL, marked at the close of bar `i`."""
+        return self.cash + self.unrealized_pnl(i)
+
+    def _apply_funding(self) -> None:
+        """
+        Settle funding for positions held into this bar.
+
+        A non-zero value in the `funding_rate` column means funding is paid at
+        the open of that bar. Longs pay shorts when the rate is positive.
+        """
+        for symbol, position in self.position.items():
+            if position.qty == 0:
+                continue
+            rates = getattr(self._d(symbol), FUNDING_COLUMN, None)
+            if rates is None:
+                continue
+            rate = rates[self._i]
+            if rate is None or rate != rate or rate == 0:  # rate != rate catches NaN
+                continue
+
+            price = self._open(symbol, self._i)
+            amount = -float(position.qty) * price * float(rate)
+            self.cash += amount
+            self.funding_payments.append({
+                "time": pd.to_datetime(self.data.index[self._i]),
+                "symbol": symbol,
+                "qty": float(position.qty),
+                "price": price,
+                "funding_rate": float(rate),
+                "amount": amount,
+            })
+
     def _slippage(self, symbol: str, order: Order):
         if self.slippage_model:
             bars = self._bars(symbol, self._i)
@@ -183,8 +291,21 @@ class Broker:
         
         position = self.position[symbol]
 
-        notional = float(abs(order.qty)) * order.executed_price
-        commission = notional * self.commission_rate
+        if liquidation:
+            # The exchange keeps the margin; nothing more is charged on top.
+            commission = 0.0
+        else:
+            # The account may have changed since the order was placed.
+            # Checked at the pre-slippage price, the same basis as at placement,
+            # so slippage alone never drops an all-in order.
+            try:
+                self._check_margin(symbol, order, order.theoretical_price)
+            except InsufficientMargin as e:
+                self.open_orders.get(symbol, {}).pop(order.id, None)
+                self.rejected_orders.append({**order.to_dict(), "reject_reason": str(e)})
+                return
+            notional = float(abs(order.qty)) * order.executed_price
+            commission = notional * self.commission_rate
         pnl = position.process_trade(order, liquidation)
         executed_time = pd.to_datetime(self.data.index[self._i])
 
@@ -193,7 +314,7 @@ class Broker:
         order.executed_at = executed_time
         order.commission = commission
         order.realized_pnl = pnl - commission
-        self.is_liquidation_order = True if liquidation else False        
+        order.is_liquidation_order = bool(liquidation)
 
         # Update trades and balance
         self.trades.append(order.to_dict())
@@ -213,8 +334,11 @@ class Broker:
                     # Create MARKET Order for liquidation & Execute
                     order = self.order(p.symbol,  -p.qty, lp, type="MARKET")
                     self._execute_trade(p.symbol, order, lp, True)
-                        
-            # 2) Execute open orders (iterate snapshots to avoid mutation issues)
+
+        # Funding is settled at the open, before this bar's orders fill.
+        self._apply_funding()
+
+        # Execute open orders (iterate snapshots to avoid mutation issues)
         for symbol, by_id in list(self.open_orders.items()):
             open, high, low, _ = self._bars(symbol, self._i)
 
