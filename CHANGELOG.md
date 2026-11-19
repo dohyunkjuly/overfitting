@@ -5,7 +5,7 @@
 ### Added
 
 - **Market data.** `overfitting.market.load(["BTC/USDT", "ETH/USDT"], "1h", start="2023-01-01")` downloads candles, and optionally funding rates, from 19 exchanges. Data is saved locally, so later calls only download what is missing. `stored()` shows what is saved; `downloads()` lists every download.
-- **Parameter optimizer.** `optimize(MyStrategy, data, params={...})` runs a grid or random search in parallel. It tunes on the first 70% of the data and reports the winner on the remaining 30%. See `result.table` and `result.heatmap(x, y)`.
+- **Parameter optimizer.** `optimize(MyStrategy, data, params={...})` runs a grid or random search in parallel. `train=0.6` or `train=("2024-01-01", "2025-01-01")` limits the search to part of the data; the winner is then backtested over all of it. See `result.table` and `result.heatmap(x, y)`.
 - **Strategy parameters.** Parameters are class attributes; override them with `MyStrategy(data, params={"fast": 10})`.
 - `Strategy(record=False)` skips detailed recording for faster runs.
 - `Strategy` accepts a prepared `Data` object, so runs can share one.

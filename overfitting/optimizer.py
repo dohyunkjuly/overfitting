@@ -25,10 +25,10 @@ and reports the best one:
     result.best_params      # {"fast": 20, "slow": 60}
     result.table            # every combination tried, best first
 
-The best of many combinations always looks better than it is, because some of
-it is luck. So by default the search only sees the first 70% of the data
-(the train period), and the result shows how the chosen parameters did on the
-last 30% (the test period), which played no part in choosing them.
+By default the search uses all the data. `train` limits it to a window, either
+the most recent share of the data (`train=0.6`) or a date range
+(`train=("2024-01-01", "2025-01-01")`). The winner is then backtested over all
+the data.
 """
 from __future__ import annotations
 
@@ -152,23 +152,26 @@ def _run_all(combinations: list[dict], workers: int) -> list[dict]:
 class OptimizeResult:
     """
     best_params   the winning combination
-    train         its metrics on the period the search saw
-    test          its metrics on the held-out period (None if test_size=0)
-    table         every combination tried, best first, with its train metrics
+    metrics       the winner's metrics over all the data (the full backtest)
+    table         every combination tried, best first, with its metrics on the
+                  training window
     trials        how many combinations were tried
+    train_start, train_end   first and last bar of the training window
+    start, end    first and last bar of all the data
     strategy      the winning strategy, run over all the data with recording on
     returns       that run's per-bar returns
     """
     strategy_name: str
     best_params: dict
-    train: pd.Series
-    test: Optional[pd.Series]
+    metrics: pd.Series
     table: pd.DataFrame
     trials: int
     maximize: str
     method: str
-    test_size: float
-    split_time: Optional[pd.Timestamp]
+    train_start: pd.Timestamp
+    train_end: pd.Timestamp
+    start: pd.Timestamp
+    end: pd.Timestamp
     strategy: object = field(repr=False, default=None)
     returns: pd.Series = field(repr=False, default=None)
 
@@ -191,10 +194,8 @@ class OptimizeResult:
             "calmar_ratio": ("Calmar Ratio", "{:.3f}"), "fills": ("Fills", "{:,.0f}"),
         }
 
-        def cell(series, key, fmt):
-            if series is None:
-                return ""
-            value = series[key]
+        def cell(key, fmt):
+            value = self.metrics[key]
             return "n/a" if value is None or not np.isfinite(value) else fmt.format(value)
 
         best = ", ".join(f"{k}={v}" for k, v in self.best_params.items())
@@ -202,23 +203,13 @@ class OptimizeResult:
             f"Optimization of {self.strategy_name}",
             f"  {'Trials':<18}{self.trials:,} ({self.method})",
             f"  {'Maximized':<18}{self.maximize}",
+            f"  {'Trained on':<18}{self.train_start:%Y-%m-%d} to {self.train_end:%Y-%m-%d}",
             f"  {'Best parameters':<18}{best}",
             "",
+            f"  {'Full backtest':<18}{self.start:%Y-%m-%d} to {self.end:%Y-%m-%d}",
         ]
-        train_share = f"Train ({1 - self.test_size:.0%})"
-        test_share = f"Test ({self.test_size:.0%})" if self.test is not None else ""
-        lines.append(f"  {'':<18}{train_share:>14}{test_share:>14}")
         for key, (label, fmt) in labels.items():
-            lines.append(f"  {label:<18}{cell(self.train, key, fmt):>14}{cell(self.test, key, fmt):>14}")
-        lines.append("")
-        if self.test is not None:
-            lines.append(f"  The search only saw data before {self.split_time:%Y-%m-%d}. The test column is")
-            lines.append("  how these parameters did afterwards, on data that played no part in")
-            lines.append(f"  choosing them. The train column is the best of {self.trials:,} tries, so expect")
-            lines.append("  it to be flattering.")
-        else:
-            lines.append(f"  No data was held out: these numbers are the best of {self.trials:,} tries on")
-            lines.append("  the same data they were chosen on, so expect live results to be worse.")
+            lines.append(f"  {label:<18}{cell(key, fmt)}")
         return "\n".join(lines)
 
 
@@ -250,10 +241,41 @@ def _combinations(params: dict, constraint, method: str, n: Optional[int], seed)
     raise ValueError("method must be 'grid' or 'random'.")
 
 
+def _train_window(index: pd.DatetimeIndex, train) -> tuple[int, int]:
+    """Bar positions [first, stop) of the training window."""
+    if isinstance(train, (tuple, list)):
+        if len(train) != 2:
+            raise ValueError('train as a date range is (start, end), e.g. ("2024-01-01", "2025-01-01").')
+        bounds = []
+        for value in train:
+            try:
+                stamp = pd.Timestamp(value)
+            except (ValueError, TypeError) as error:
+                raise ValueError(f"train: cannot read {value!r} as a date.") from error
+            if pd.isna(stamp):
+                raise ValueError(f"train: cannot read {value!r} as a date.")
+            bounds.append(stamp.tz_convert(None) if stamp.tzinfo is not None else stamp)
+        if bounds[1] <= bounds[0]:
+            raise ValueError(f"train ends ({bounds[1]:%Y-%m-%d}) before it starts "
+                             f"({bounds[0]:%Y-%m-%d}); write it as (start, end).")
+        first, stop = index.searchsorted(bounds[0]), index.searchsorted(bounds[1])
+    elif isinstance(train, (int, float)) and not isinstance(train, bool):
+        if not 0 < train <= 1:
+            raise ValueError("train must be a share of the data above 0 and up to 1, "
+                             'or a (start, end) date range.')
+        first, stop = len(index) - int(round(len(index) * train)), len(index)
+    else:
+        raise ValueError('train must be a share of the data, such as 0.6, or a (start, end) '
+                         'date range, such as ("2024-01-01", "2025-01-01").')
+    if stop - first < 2:
+        raise ValueError(f"The training window holds {max(stop - first, 0)} bars; it needs at least 2.")
+    return int(first), int(stop)
+
+
 def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callable] = "sharpe_ratio",
              constraint: Optional[Callable] = None, method: str = "grid", n: Optional[int] = None,
-             seed: Optional[int] = None, test_size: float = 0.3, workers: Optional[int] = None,
-             **strategy_kwargs) -> OptimizeResult:
+             seed: Optional[int] = None, train: Union[float, tuple] = 1.0,
+             workers: Optional[int] = None, **strategy_kwargs) -> OptimizeResult:
     """
     Find the parameter values that maximize a metric.
 
@@ -266,8 +288,9 @@ def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callabl
                   e.g. lambda p: p.fast < p.slow
     method        "grid" tries every combination; "random" tries `n` of them
     n, seed       how many combinations "random" tries, and its random seed
-    test_size     share of the data, at the end, kept out of the search and used
-                  to check the winner. 0 searches on everything.
+    train         the data the search uses: a share of the most recent data
+                  (default 1.0, all of it), or a (start, end) date range, end
+                  not included. The winner is then backtested over all the data.
     workers       processes to use; default is all cores. 1 runs in this process.
     **strategy_kwargs   passed to the strategy: initial_capital, commission_rate,
                   slippage, and so on
@@ -275,8 +298,6 @@ def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callabl
     Returns an OptimizeResult. Combinations whose metric is undefined (for
     example no trades, so no Sharpe ratio) are kept in the table but never win.
     """
-    if not 0 <= test_size < 1:
-        raise ValueError("test_size must be at least 0 and below 1.")
     if isinstance(maximize, str) and maximize not in METRICS:
         raise ValueError(f"maximize must be one of {METRICS} or a function; got {maximize!r}.")
     unknown = [name for name in params if not hasattr(strategy, name)]
@@ -287,12 +308,9 @@ def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callabl
 
     combinations = _combinations(params, constraint, method, n, seed)
 
-    bars = len(next(iter(data.values())))
-    split = bars - int(round(bars * test_size))
-    if split < 2:
-        raise ValueError("test_size leaves no data to search on.")
-    train_data = Data({symbol: frame.iloc[:split] for symbol, frame in data.items()})
     full_data = Data(data)
+    first, stop = _train_window(pd.DatetimeIndex(full_data.index), train)
+    train_data = Data({symbol: frame.iloc[first:stop] for symbol, frame in data.items()})
 
     _JOB.update(strategy=strategy, data=train_data, kwargs=strategy_kwargs, maximize=maximize,
                 day_starts=_daily_groups(train_data.index))
@@ -309,26 +327,17 @@ def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callabl
     best_params = {name: table[name].iloc[0] for name in params}
     best_params = {k: (v.item() if hasattr(v, "item") else v) for k, v in best_params.items()}
 
-    # Run the winner over everything, with recording, and measure both periods.
+    # Backtest the winner over all the data, with recording.
     winner = strategy(data=full_data, params=best_params, **strategy_kwargs)
     returns = winner.run()
-    values = returns.to_numpy()
-    fills = pd.DataFrame(winner.broker.trades)
-    split_time = pd.Timestamp(full_data.index[split]) if split < bars else None
-    executed = pd.to_datetime(fills["executed_at"]) if len(fills) else pd.Series([], dtype="datetime64[ns]")
-    train_fills = int((executed < split_time).sum()) if split_time is not None else len(fills)
+    measured = _measure(returns.to_numpy(), _daily_groups(full_data.index), len(winner.broker.trades))
+    measured["objective"] = _objective(maximize, measured)
 
-    def period(start: int, stop: int, fill_count: int) -> pd.Series:
-        measured = _measure(values[start:stop], _daily_groups(full_data.index[start:stop]), fill_count)
-        measured["objective"] = _objective(maximize, measured)
-        return pd.Series(measured)
-
-    train = period(0, split, train_fills)
-    test = period(split, bars, len(fills) - train_fills) if split < bars else None
-
+    index = full_data.index
     return OptimizeResult(
-        strategy_name=strategy.__name__, best_params=best_params, train=train, test=test,
+        strategy_name=strategy.__name__, best_params=best_params, metrics=pd.Series(measured),
         table=table, trials=len(combinations),
         maximize=maximize if isinstance(maximize, str) else getattr(maximize, "__name__", "custom"),
-        method=method, test_size=test_size, split_time=split_time, strategy=winner, returns=returns,
+        method=method, train_start=pd.Timestamp(index[first]), train_end=pd.Timestamp(index[stop - 1]),
+        start=pd.Timestamp(index[0]), end=pd.Timestamp(index[-1]), strategy=winner, returns=returns,
     )

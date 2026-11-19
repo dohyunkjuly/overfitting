@@ -141,13 +141,12 @@ def test_params_read_by_key_or_attribute():
 
 def test_grid_search_finds_the_best_entry():
     result = optimize(BuyAt, frame(), {"entry": range(0, 120, 5)}, maximize="total_return",
-                      test_size=0, workers=1, initial_capital=1_000)
+                      workers=1, initial_capital=1_000)
 
     assert result.best_params == {"entry": 40}            # the bottom of the V
     assert result.trials == 24 and len(result.table) == 24
     assert result.table["entry"].iloc[0] == 40
     assert result.table["objective"].is_monotonic_decreasing
-    assert result.test is None and result.split_time is None
 
 
 def test_table_has_parameters_metrics_and_objective():
@@ -198,59 +197,66 @@ def test_strategy_arguments_are_passed_through():
     free = optimize(Swing, data, {"period": [10]}, workers=1, commission_rate=0.0)
     costly = optimize(Swing, data, {"period": [10]}, workers=1, commission_rate=0.01)
 
-    assert costly.train["total_return"] < free.train["total_return"]
+    assert costly.metrics["total_return"] < free.metrics["total_return"]
 
 
-# --------------------------------------------------------- train and test ---
+# ------------------------------------------------------------ training window ---
 
-def test_search_only_sees_the_train_period():
-    # Over all the data the best entry is bar 40. With the last 70% held out, the
-    # search sees bars 0 to 35 only, where the price just falls: buying latest loses least.
-    result = optimize(BuyAt, frame(), {"entry": range(0, 36, 5)}, maximize="total_return",
-                      test_size=0.7, workers=1, initial_capital=1_000)
-
-    assert result.best_params == {"entry": 35}
-    assert result.split_time == pd.Timestamp("2024-01-01") + pd.Timedelta(hours=36)
-    assert result.train["total_return"] < 0 < result.test["total_return"]
-
-
-def test_not_trading_beats_losing():
-    # Entries after bar 35 never happen inside the train period, so they return 0,
-    # which is better than every entry that bought into the fall.
-    result = optimize(BuyAt, frame(), {"entry": [10, 20, 30, 60]}, maximize="total_return",
-                      test_size=0.7, workers=1, initial_capital=1_000)
-
-    assert result.best_params == {"entry": 60}
-    assert result.train["total_return"] == 0 and result.train["fills"] == 0
-
-
-def test_winner_is_rerun_on_all_data_with_recording():
+def test_default_trains_on_all_the_data():
     data = noisy()
     result = optimize(Swing, data, {"period": [8, 12, 16], "hold": [3, 5]}, workers=1)
+    index = data["BTC"].index
+
+    assert (result.train_start, result.train_end) == (index[0], index[-1])
+    assert (result.start, result.end) == (index[0], index[-1])
+    for name in ("total_return", "sharpe_ratio", "max_drawdown", "fills", "objective"):
+        assert result.metrics[name] == approx(result.table.iloc[0][name])   # same backtest
+
+
+def test_search_only_sees_the_most_recent_share():
+    # The last 30% of the V only rises, so buying on its first bar wins there. Over all
+    # the data, entry 0 buys at 100 instead and the bottom of the V (bar 40) would win.
+    result = optimize(BuyAt, frame(), {"entry": range(0, 36, 5)}, maximize="total_return",
+                      train=0.3, workers=1, initial_capital=1_000)
+    index = frame()["BTC"].index
+
+    assert result.train_start == index[len(index) - round(len(index) * 0.3)]
+    assert result.train_end == index[-1]
+    assert result.best_params == {"entry": 0}             # bars count from the window's start
+
+
+def test_search_only_sees_the_date_range():
+    # Bars 0 to 35 of the V only fall, so buying latest loses least there.
+    result = optimize(BuyAt, frame(), {"entry": range(0, 36, 5)}, maximize="total_return",
+                      train=("2024-01-01", "2024-01-02 12:00"), workers=1, initial_capital=1_000)
+
+    assert result.best_params == {"entry": 35}
+    assert result.train_start == pd.Timestamp("2024-01-01")
+    assert result.train_end == pd.Timestamp("2024-01-02 11:00")     # end is not included
+
+
+def test_winner_is_backtested_on_all_data_with_recording():
+    data = noisy()
+    result = optimize(Swing, data, {"period": [8, 12, 16], "hold": [3, 5]},
+                      train=("2024-01-20", "2024-02-20"), workers=1)
+    daily = metrics.aggregate_returns(result.returns, "D")
 
     assert len(result.returns) == len(data["BTC"])
     assert result.strategy.params == result.best_params
     assert len(result.strategy.fetch_round_trips()) > 0   # full tables for the report
-    assert result.train["fills"] + result.test["fills"] == len(result.strategy.fetch_trades())
+    assert result.metrics["fills"] == len(result.strategy.fetch_trades())
+    assert result.metrics["sharpe_ratio"] == approx(metrics.sharpe_ratio(daily))
 
 
-def test_train_metrics_equal_the_winning_row_of_the_table():
-    # The full run's first 70% is the same backtest the search ran, bar for bar.
-    result = optimize(Swing, noisy(), {"period": [8, 12, 16], "hold": [3, 5]}, workers=1)
-    row = result.table.iloc[0]
-
-    for name in ("total_return", "sharpe_ratio", "max_drawdown", "fills", "objective"):
-        assert result.train[name] == approx(row[name])
-
-
-def test_test_metrics_come_from_the_held_out_returns():
-    data = noisy()
-    result = optimize(Swing, data, {"period": [10], "hold": [5]}, test_size=0.25, workers=1)
-    split = len(data["BTC"]) - round(len(data["BTC"]) * 0.25)
-    held_out = metrics.aggregate_returns(result.returns.iloc[split:], "D")
-
-    assert result.test["total_return"] == approx(metrics.total_return(held_out))
-    assert result.test["sharpe_ratio"] == approx(metrics.sharpe_ratio(held_out))
+@pytest.mark.parametrize("train, message", [
+    (0, "share of the data"), (1.5, "share of the data"), ("2024", "share of the data"),
+    (("2024-01-01",), r"\(start, end\)"), (("soon", "2025-01-01"), "cannot read"),
+    (("2024-01-01", None), "cannot read"), (("2024-02-01", "2024-01-01"), "before it starts"),
+    (("2030-01-01", "2031-01-01"), "holds 0 bars"),
+])
+def test_bad_training_windows_are_rejected(train, message):
+    with pytest.raises(ValueError, match=message):
+        optimize(Swing, noisy(), {"period": [5]}, train=train, workers=1)
 
 
 # ---------------------------------------------------------------- edge cases ---
@@ -280,8 +286,6 @@ def test_bad_arguments_are_rejected():
         optimize(Swing, data, {"peroid": [5]})
     with pytest.raises(ValueError, match="maximize must be one of"):
         optimize(Swing, data, {"period": [5]}, maximize="profit")
-    with pytest.raises(ValueError, match="test_size"):
-        optimize(Swing, data, {"period": [5]}, test_size=1.0)
     with pytest.raises(ValueError, match="needs n"):
         optimize(Swing, data, {"period": [5]}, method="random")
     with pytest.raises(ValueError, match="'grid' or 'random'"):
@@ -342,17 +346,12 @@ def test_heatmap_is_a_grid_of_two_parameters():
         result.heatmap("period", "speed")
 
 
-def test_printed_result_shows_trials_parameters_and_both_periods():
-    text = str(optimize(Swing, noisy(), {"period": [8, 12], "hold": [3, 5]}, workers=1))
+def test_printed_result_shows_the_training_window_and_full_backtest():
+    text = str(optimize(Swing, noisy(), {"period": [8, 12], "hold": [3, 5]},
+                        train=("2024-01-20", "2024-02-20"), workers=1))
 
     assert "Optimization of Swing" in text
     assert "4 (grid)" in text and "sharpe_ratio" in text
-    assert "Train (70%)" in text and "Test (30%)" in text
-    assert "best of 4 tries" in text and "played no part" in text
-
-
-def test_printed_result_warns_when_nothing_was_held_out():
-    text = str(optimize(Swing, noisy(), {"period": [8, 12]}, test_size=0, workers=1))
-
-    assert "Train (100%)" in text and "Test" not in text
-    assert "No data was held out" in text
+    assert "Trained on        2024-01-20 to 2024-02-19" in text
+    assert "Full backtest     2024-01-01 to 2024-03-20" in text
+    assert "Sharpe Ratio" in text and "Test" not in text

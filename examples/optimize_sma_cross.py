@@ -54,15 +54,18 @@ class SmaCross(Strategy):
 #
 # Every combination of `fast` and `slow` is tried, except those the
 # `constraint` rejects (a fast average longer than the slow one makes no
-# sense). By default the search only sees the first 70% of the data; the last
-# 30% is kept back to check the winner. Any `Strategy` argument, such as
-# `slippage` or `commission_rate`, can be passed and applies to every run.
+# sense). `train` picks the data the search uses: here 2023, given as a date
+# range (the end date is not included). It can also be a share of the most
+# recent data, such as `train=0.6`; by default the search uses all the data.
+# The winner is then backtested over all the data. Any `Strategy` argument,
+# such as `slippage` or `commission_rate`, can be passed and applies to every run.
 
 result = optimize(
     SmaCross, data,
     params={"fast": range(5, 55, 5), "slow": range(20, 220, 20)},
     maximize="sharpe_ratio",
     constraint=lambda p: p.fast < p.slow,
+    train=("2023-01-01", "2024-01-01"),
     slippage=0.001,
 )
 print(result)
@@ -71,13 +74,13 @@ print(result)
 
 print(result.best_params)   # the winning combination
 print(result.trials)        # how many combinations were tried
-print(result.split_time)    # where the test period starts
-result.test                 # the winner's metrics on the held-out 30%
+print(result.train_start, result.train_end)   # the training window
+result.metrics              # the winner's metrics over all the data
 
 # **3. Every combination tried.**
 #
 # `result.table` has one row per combination, best first, with its metrics on
-# the train period. `objective` is the value that was maximized.
+# the training window. `objective` is the value that was maximized.
 
 result.table.head(10)
 
@@ -95,7 +98,7 @@ ax.set_xticks(range(len(grid.columns)), grid.columns)
 ax.set_yticks(range(len(grid.index)), grid.index)
 ax.set_xlabel("fast")
 ax.set_ylabel("slow")
-ax.set_title("Sharpe ratio on the train period")
+ax.set_title("Sharpe ratio on the training window")
 fig.colorbar(image, ax=ax)
 plt.show()
 # -
@@ -128,8 +131,7 @@ print(random_result)
 
 # **5. The winning strategy.**
 #
-# `result.strategy` is the winner, run over all the data (train and test) with
-# recording on, so the usual report, charts and trade tables work.
+# `result.strategy` is the winner, run over all the data with recording on, so the usual report, charts and trade tables work.
 
 result.strategy.plot(result.returns)
 
