@@ -62,7 +62,8 @@ def run():
         frame = make_frame([(c, c * 1.004, c * 0.996, c) for c in closes])
         frame["funding_rate"] = np.where(np.arange(len(frame)) % 8 == 0, 0.0001, 0.0)
         frames[symbol] = frame
-    strategy = Swing(data=frames, initial_capital=10_000, commission_rate=0.0005, slippage=0.0005)
+    strategy = Swing(data=frames, initial_capital=10_000, commission_rate=0.0005, slippage=0.0005,
+                     funding=True)
     strategy.set_leverage("BTC", 5)
     returns = strategy.run()
     return {

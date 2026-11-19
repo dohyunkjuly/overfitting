@@ -687,7 +687,7 @@ def backtest():
     frame = make_frame([(c, c * 1.005, c * 0.995, c) for c in closes])
     frame["funding_rate"] = np.where(np.arange(len(frame)) % 8 == 0, 0.0001, 0.0)
     strategy = Swing(data={SYMBOL: frame}, initial_capital=10_000, commission_rate=0.0005,
-                     slippage=0.0005)
+                     slippage=0.0005, funding=True)
     returns = strategy.run()
     return strategy, returns
 

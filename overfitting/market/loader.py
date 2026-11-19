@@ -123,7 +123,7 @@ def _funding_column(index: pd.DatetimeIndex, records: np.ndarray, step: int) -> 
 
 
 def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=None, *,
-         exchange: str = "binance", quote: str = "USDT", funding: bool = True,
+         exchange: str = "binance", quote: str | None = None, funding: bool = False,
          data_dir=None, progress: bool = True) -> dict[str, pd.DataFrame]:
     """
     Candles for one or more perpetual futures, ready to pass to a Strategy.
@@ -133,10 +133,11 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
     timeframe   one of 1m 3m 5m 15m 30m 1h 2h 4h 6h 12h 1d
     start, end  dates such as "2023-01-01" (UTC). `end` defaults to now; only
                 bars that have closed are returned.
-    exchange    "binance", "bybit" or "okx"
-    quote       quote currency for bare names like "BTC"
-    funding     add a `funding_rate` column: the rate paid at each bar's open,
-                0 on bars without a payment
+    exchange    a name from EXCHANGES, such as "binance", "bybit" or "okx"
+    quote       quote currency for bare names like "BTC"; default USDT, or the
+                exchange's own (USDC on Hyperliquid, USD on dYdX)
+    funding     also download funding rates and add a `funding_rate` column:
+                the rate paid at each bar's open, 0 on bars without a payment
     data_dir    where the store lives; default ~/.overfitting/data, or the
                 OVERFITTING_DATA_DIR environment variable
     progress    print what is being downloaded
@@ -164,7 +165,7 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
         raise ValueError("No closed bars between start and end.")
 
     connector = get_exchange(exchange)
-    pairs = {name: parse_symbol(name, quote) for name in names}
+    pairs = {name: parse_symbol(name, quote or connector.default_quote) for name in names}
 
     frames = {}
     with Store(data_dir) as store:
@@ -177,7 +178,11 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
                                  f"{_day(start_ms)} and {_day(end_ms)}.")
             frame = _frame(candles)
 
-            if funding and connector.funding_url is not None:
+            if funding and connector.funding_url is None:
+                frame["funding_rate"] = 0.0
+                warnings.warn(f"{connector.name} does not provide funding rate history; "
+                              "funding_rate is 0 throughout.", stacklevel=2)
+            elif funding:
                 _sync_funding(store, connector, base, q, start_ms, end_ms, progress)
                 records = store.funding(connector.name, key, start_ms, end_ms)
                 frame["funding_rate"] = _funding_column(frame.index, records, step)
@@ -188,6 +193,12 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
                     warnings.warn(f"{connector.name} funding history for {key} starts at "
                                   f"{_day(int(records[0, 0]))}, after the first bar; earlier "
                                   "bars have funding_rate 0.", stacklevel=2)
+
+            if candles[0, 0] - start_ms >= step:
+                warnings.warn(f"{connector.name} {key} {timeframe} candles start at "
+                              f"{_day(int(candles[0, 0]))}, after the requested start "
+                              f"{_day(start_ms)} (listed later, or the exchange keeps "
+                              "limited history).", stacklevel=2)
 
             expected = (candles[-1, 0] - candles[0, 0]) // step + 1
             if len(candles) < expected:

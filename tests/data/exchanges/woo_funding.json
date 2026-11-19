@@ -1,0 +1,34 @@
+{
+  "success": true,
+  "data": {
+    "rows": [
+      {
+        "symbol": "PERP_BTC_USDT",
+        "fundingRate": "0.0003552",
+        "fundingRateTimestamp": 1704124800000,
+        "nextFundingTime": 1704153600000,
+        "markPrice": "42795"
+      },
+      {
+        "symbol": "PERP_BTC_USDT",
+        "fundingRate": "0.00037128",
+        "fundingRateTimestamp": 1704096000000,
+        "nextFundingTime": 1704124800000,
+        "markPrice": "42506"
+      },
+      {
+        "symbol": "PERP_BTC_USDT",
+        "fundingRate": "0.00034301",
+        "fundingRateTimestamp": 1704067200000,
+        "nextFundingTime": 1704096000000,
+        "markPrice": "42292"
+      }
+    ],
+    "meta": {
+      "total": 3,
+      "recordsPerPage": 500,
+      "currentPage": 1
+    }
+  },
+  "timestamp": 1795040247666
+}

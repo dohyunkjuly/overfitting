@@ -154,7 +154,7 @@ def test_liquidation_closes_the_round_trip():
 def test_funding_is_attributed_to_the_open_round_trip():
     frame = make_frame([FLAT, FLAT, FLAT])
     frame["funding_rate"] = [0.0, 0.01, 0.0]
-    broker = Broker(Data({SYMBOL: frame}), 10_000, 0.0, 0.005, 0, None)
+    broker = Broker(Data({SYMBOL: frame}), 10_000, 0.0, 0.005, 0, None, funding=True)
     market(broker, 1)
     broker.next()
     market(broker, -1)

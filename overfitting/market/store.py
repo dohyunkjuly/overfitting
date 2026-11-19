@@ -293,7 +293,8 @@ class Store:
             try:
                 rows = self._read_foreign(path, columns)
             except Exception as error:      # unreadable, wrong columns, wrong types
-                problem = f"it cannot be read as {', '.join(columns)} ({error})"
+                reason = str(error).replace(f" '{path}'", "").replace(str(path), path.name)
+                problem = f"it cannot be read as {', '.join(columns)} ({reason})"
             else:
                 problem = self._check(rows, key[1], period)
 
@@ -500,6 +501,8 @@ class Store:
         """The log, newest first: every download, import, missing, changed or rejected file."""
         import pandas as pd
         self.flush()
+        for key in self._all_keys():        # log files added, changed or deleted by hand
+            self._reconcile_once(key)
         frame = pd.read_sql_query(
             'SELECT id, at, event, exchange, dataset, symbol, start, "end", rows, files, version, note '
             "FROM log ORDER BY id DESC", self._db)

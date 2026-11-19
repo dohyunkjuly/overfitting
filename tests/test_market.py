@@ -6,8 +6,10 @@ API rules (inclusive or exclusive bounds, newest-first or oldest-first
 pages, page size limits), so these tests run offline. Set
 OVERFITTING_LIVE=1 to also run one real download per exchange.
 """
+import json
 import os
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -61,7 +63,7 @@ class FakeServer:
             t += 8 * HOUR
         return [r for r in out if lo <= r[0] <= hi]
 
-    def __call__(self, url, params, timeout=30.0):
+    def __call__(self, url, params, timeout=30.0, method="GET"):
         self.calls.append((url, dict(params)))
         if self.fail_after is not None and len(self.calls) > self.fail_after:
             raise ConnectionError("network down")
@@ -151,7 +153,7 @@ def test_bare_symbol_takes_the_quote_argument():
 @pytest.mark.parametrize("exchange", ["binance", "bybit", "okx"])
 def test_load_returns_every_closed_bar(server, store_dir, exchange):
     data = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-11", exchange=exchange,
-                      data_dir=store_dir)
+                      data_dir=store_dir, funding=True)
 
     frame = data["BTC"]
     assert list(frame.columns) == ["open", "high", "low", "close", "volume", "funding_rate"]
@@ -166,8 +168,7 @@ def test_load_returns_every_closed_bar(server, store_dir, exchange):
 
 @pytest.mark.parametrize("exchange", ["binance", "bybit", "okx"])
 def test_pages_follow_the_exchange_limit(server, store_dir, exchange):
-    quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-03", exchange=exchange,
-               funding=False, data_dir=store_dir)
+    quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-03", exchange=exchange, data_dir=store_dir)
 
     limit = ex.EXCHANGES[exchange].candle_limit
     assert len(server.calls) == -(-2 * 24 * 60 // limit)
@@ -234,7 +235,9 @@ def test_bars_closed_since_the_last_load_are_fetched(server, store_dir, monkeypa
 
 def test_range_before_listing_is_not_asked_for_again(server, store_dir):
     server.listed["NEW"] = T0 + 5 * 24 * HOUR
-    frame = quiet_load("NEW", "1h", start="2024-01-01", end="2024-01-10", data_dir=store_dir)["NEW"]
+    with pytest.warns(UserWarning, match="start at 2024-01-06 00:00, after the requested start"):
+        frame = load("NEW", "1h", start="2024-01-01", end="2024-01-10", data_dir=store_dir,
+                     progress=False)["NEW"]
     calls = len(server.calls)
     quiet_load("NEW", "1h", start="2024-01-01", end="2024-01-10", data_dir=store_dir)
 
@@ -245,13 +248,12 @@ def test_range_before_listing_is_not_asked_for_again(server, store_dir):
 def test_interrupted_download_resumes_where_it_stopped(server, store_dir):
     server.fail_after = 3
     with pytest.raises(ExchangeError, match="could not reach"):
-        quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-05", funding=False, data_dir=store_dir)
+        quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-05", data_dir=store_dir)
     saved_windows = 3
 
     server.fail_after = None
     server.calls.clear()
-    frame = quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-05", funding=False,
-                       data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1m", start="2024-01-01", end="2024-01-05", data_dir=store_dir)["BTC"]
 
     assert len(frame) == 4 * 24 * 60
     assert len(server.calls) == -(-4 * 24 * 60 // 1500) - saved_windows
@@ -260,7 +262,8 @@ def test_interrupted_download_resumes_where_it_stopped(server, store_dir):
 # ----------------------------------------------------------------- funding ---
 
 def test_funding_lands_on_the_bar_it_is_paid_at(server, store_dir):
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-03", data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-03", funding=True,
+                       data_dir=store_dir)["BTC"]
 
     paid = frame[frame["funding_rate"] != 0]
     assert list(paid.index.hour) == [0, 8, 16] * 2      # payments stamped 8 ms late
@@ -268,16 +271,17 @@ def test_funding_lands_on_the_bar_it_is_paid_at(server, store_dir):
 
 
 def test_daily_bars_add_up_the_days_funding(server, store_dir):
-    hourly = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-05", data_dir=store_dir)["BTC"]
-    daily = quiet_load("BTC", "1d", start="2024-01-01", end="2024-01-05", data_dir=store_dir)["BTC"]
+    hourly = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-05", funding=True,
+                        data_dir=store_dir)["BTC"]
+    daily = quiet_load("BTC", "1d", start="2024-01-01", end="2024-01-05", funding=True,
+                       data_dir=store_dir)["BTC"]
 
     by_day = hourly["funding_rate"].resample("D").sum()
     assert np.allclose(daily["funding_rate"], by_day)
 
 
-def test_funding_can_be_left_out(server, store_dir):
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", funding=False,
-                       data_dir=store_dir)["BTC"]
+def test_funding_is_left_out_by_default(server, store_dir):
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", data_dir=store_dir)["BTC"]
 
     assert "funding_rate" not in frame
     assert not any("funding" in url.lower() for url, _ in server.calls)
@@ -288,16 +292,21 @@ def test_late_funding_history_warns(server, store_dir, monkeypatch):
     monkeypatch.setattr(server, "_funding",
                         lambda base, lo, hi: [r for r in original(base, lo, hi) if r[0] > T0 + 10 * 24 * HOUR])
     with pytest.warns(UserWarning, match="funding history .* starts at"):
-        load("BTC", "1h", start="2024-01-01", end="2024-01-20", data_dir=store_dir, progress=False)
+        load("BTC", "1h", start="2024-01-01", end="2024-01-20", funding=True,
+             data_dir=store_dir, progress=False)
 
 
 # ---------------------------------------------------------- several symbols ---
 
 def test_symbols_are_trimmed_to_the_bars_they_share(server, store_dir):
     server.listed["ETH"] = T0 + 2 * 24 * HOUR
-    with pytest.warns(UserWarning, match="Kept only the 192 bars"):
+    with pytest.warns(UserWarning) as caught:
         data = load(["BTC", "ETH"], "1h", start="2024-01-01", end="2024-01-11",
                     data_dir=store_dir, progress=False)
+
+    messages = [str(w.message) for w in caught]
+    assert any("ETH/USDT 1h candles start at 2024-01-03" in m for m in messages)
+    assert any("Kept only the 192 bars" in m for m in messages)
 
     assert data["BTC"].index.equals(data["ETH"].index)
     assert data["BTC"].index[0] == pd.Timestamp("2024-01-03")
@@ -318,7 +327,8 @@ def test_missing_bars_warn(server, store_dir):
 
 
 def test_loaded_data_runs_a_backtest_with_funding(server, store_dir):
-    data = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-05", data_dir=store_dir)
+    data = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-05", funding=True,
+                      data_dir=store_dir)
 
     class Hold(Strategy):
         def init(self):
@@ -328,7 +338,7 @@ def test_loaded_data_runs_a_backtest_with_funding(server, store_dir):
             if i == 0:
                 self.market_order("BTC", 1)
 
-    strategy = Hold(data)
+    strategy = Hold(data, funding=True)
     strategy.run()
     assert len(strategy.fetch_funding()) == 4 * 3 - 1        # every payment after the entry bar
 
@@ -357,17 +367,16 @@ def test_duplicate_symbols_are_rejected(server, store_dir):
 def test_throttling_is_retried(server, store_dir, monkeypatch):
     answers = iter([(429, None), (200, {"retCode": 10006, "retMsg": "Too many visits"})])
 
-    def flaky(url, params, timeout=30.0):
+    def flaky(url, params, timeout=30.0, method="GET"):
         return next(answers, None) or server(url, params)
 
     monkeypatch.setattr(ex, "_get_json", flaky)
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", exchange="bybit",
-                       funding=False, data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", exchange="bybit", data_dir=store_dir)["BTC"]
     assert len(frame) == 24
 
 
 def test_persistent_throttling_gives_up(server, store_dir, monkeypatch):
-    monkeypatch.setattr(ex, "_get_json", lambda url, params, timeout=30.0: (429, None))
+    monkeypatch.setattr(ex, "_get_json", lambda url, params, timeout=30.0, method="GET": (429, None))
     with pytest.raises(ExchangeError, match="429"):
         quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", data_dir=store_dir)
 
@@ -440,12 +449,11 @@ def requested(server):
 
 
 def test_deleted_file_is_downloaded_again(server, store_dir):
-    quiet_load("BTC", "1h", start="2023-06-01", end="2024-01-20", funding=False, data_dir=store_dir)
+    quiet_load("BTC", "1h", start="2023-06-01", end="2024-01-20", data_dir=store_dir)
     (btc_folder(store_dir) / "2023.parquet").unlink()
     server.calls.clear()
 
-    frame = quiet_load("BTC", "1h", start="2023-06-01", end="2024-01-20", funding=False,
-                       data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2023-06-01", end="2024-01-20", data_dir=store_dir)["BTC"]
 
     assert len(frame) == (pd.Timestamp("2024-01-20") - pd.Timestamp("2023-06-01")) // pd.Timedelta("1h")
     assert requested(server)[0][0] == pd.Timestamp("2023-06-01")
@@ -453,15 +461,24 @@ def test_deleted_file_is_downloaded_again(server, store_dir):
     assert downloads(store_dir)["event"].tolist()[:2] == ["download", "missing"]
 
 
+def test_downloads_shows_a_deletion_straight_away(server, store_dir):
+    quiet_load("BTC", "1h", start="2023-06-01", end="2024-01-20", data_dir=store_dir)
+    (btc_folder(store_dir) / "2023.parquet").unlink()
+
+    log = downloads(store_dir)
+
+    assert log["event"].iloc[0] == "missing"
+    assert log["files"].iloc[0] == "2023.parquet"
+
+
 def test_file_put_in_by_hand_is_used_without_downloading(server, store_dir, tmp_path):
     elsewhere = tmp_path / "other"
-    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-10", funding=False, data_dir=elsewhere)
+    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-10", data_dir=elsewhere)
     btc_folder(store_dir).mkdir(parents=True)
     (btc_folder(elsewhere) / "2024.parquet").rename(btc_folder(store_dir) / "2024.parquet")
     server.calls.clear()
 
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-10", funding=False,
-                       data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-10", data_dir=store_dir)["BTC"]
 
     assert len(frame) == 9 * 24
     assert server.calls == []
@@ -481,8 +498,7 @@ def test_hand_made_file_with_timestamps_and_any_order_is_accepted(server, store_
     btc_folder(store_dir).mkdir(parents=True)
     pq.write_table(table, btc_folder(store_dir) / "2024.parquet")
 
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-03", funding=False,
-                       data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-03", data_dir=store_dir)["BTC"]
 
     assert server.calls == []
     assert frame.index.is_monotonic_increasing and len(frame) == 48
@@ -507,8 +523,7 @@ def test_bad_hand_made_file_is_set_aside(server, store_dir, name, rows, reason):
     pq.write_table(table, btc_folder(store_dir) / name)
 
     with pytest.warns(UserWarning, match=reason):
-        frame = load("BTC", "1h", start="2024-01-01", end="2024-01-02", funding=False,
-                     data_dir=store_dir, progress=False)["BTC"]
+        frame = load("BTC", "1h", start="2024-01-01", end="2024-01-02", data_dir=store_dir, progress=False)["BTC"]
 
     assert (btc_folder(store_dir) / (name + ".invalid")).exists()
     assert len(frame) == 24 and np.allclose(frame["open"], [price(T0 + k * HOUR) for k in range(24)])
@@ -518,14 +533,13 @@ def test_bad_hand_made_file_is_set_aside(server, store_dir, name, rows, reason):
 def test_file_changed_by_hand_keeps_only_what_it_holds(server, store_dir):
     import pyarrow.parquet as pq
 
-    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-11", funding=False, data_dir=store_dir)
+    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-11", data_dir=store_dir)
     path = btc_folder(store_dir) / "2024.parquet"
     table = pq.read_table(path)
     pq.write_table(table.slice(0, 5 * 24), path)                # keep the first 5 days only
     server.calls.clear()
 
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-11", funding=False,
-                       data_dir=store_dir)["BTC"]
+    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-11", data_dir=store_dir)["BTC"]
 
     assert len(frame) == 10 * 24
     assert requested(server)[0][0] == pd.Timestamp("2024-01-06")
@@ -534,17 +548,18 @@ def test_file_changed_by_hand_keeps_only_what_it_holds(server, store_dir):
 
 def test_empty_range_before_listing_survives_a_deleted_file(server, store_dir):
     server.listed["NEW"] = int(pd.Timestamp("2024-01-05").value // 1e6)
-    quiet_load("NEW", "1h", start="2023-06-01", end="2024-01-10", funding=False, data_dir=store_dir)
+    quiet_load("NEW", "1h", start="2023-06-01", end="2024-01-10", data_dir=store_dir)
     (store_dir / "binance" / "candles" / "1h" / "NEW-USDT" / "2024.parquet").unlink()
     server.calls.clear()
 
-    quiet_load("NEW", "1h", start="2023-06-01", end="2024-01-10", funding=False, data_dir=store_dir)
+    quiet_load("NEW", "1h", start="2023-06-01", end="2024-01-10", data_dir=store_dir)
 
     assert requested(server) and all(start >= pd.Timestamp("2024-01-01") for start, _ in requested(server))
 
 
 def test_download_log_and_inventory(server, store_dir):
-    quiet_load(["BTC", "ETH"], "1h", start="2024-01-01", end="2024-01-03", data_dir=store_dir)
+    quiet_load(["BTC", "ETH"], "1h", start="2024-01-01", end="2024-01-03", funding=True,
+               data_dir=store_dir)
 
     log = downloads(store_dir)
     assert set(log["event"]) == {"download"}
@@ -561,7 +576,7 @@ def test_download_log_and_inventory(server, store_dir):
 
 def test_data_dir_from_environment(server, tmp_path, monkeypatch):
     monkeypatch.setenv("OVERFITTING_DATA_DIR", str(tmp_path / "env"))
-    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02")
+    quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-02", funding=True)
 
     assert (tmp_path / "env" / "binance" / "candles" / "1h" / "BTC-USDT" / "2024.parquet").exists()
     table = stored()
@@ -569,12 +584,62 @@ def test_data_dir_from_environment(server, tmp_path, monkeypatch):
     assert (table["symbol"] == "BTC/USDT").all()
 
 
+# ------------------------------------------- recorded exchange responses ---
+# tests/data/exchanges/<name>_candles.json and <name>_funding.json hold real
+# responses (trimmed to a few rows) saved when each connector was written.
+
+RESPONSES = Path(__file__).parent / "data" / "exchanges"
+
+
+def recorded(kind):
+    return sorted(p.name.removesuffix(f"_{kind}.json") for p in RESPONSES.glob(f"*_{kind}.json"))
+
+
+def offline(name):
+    """The connector, answering its contract-size lookup from the saved response."""
+    exchange = ex.EXCHANGES[name]()
+    contract = RESPONSES / f"{name}_contract.json"
+    if contract.exists():
+        exchange.current = exchange.symbol("BTC", exchange.default_quote)
+        exchange._request = lambda url, params: json.loads(contract.read_text())
+    return exchange
+
+
+@pytest.mark.parametrize("name", recorded("candles"))
+def test_recorded_candles_parse(name):
+    exchange = offline(name)
+    rows = exchange.parse_candles(json.loads((RESPONSES / f"{name}_candles.json").read_text()))
+
+    assert rows and all(len(row) == 6 for row in rows)
+    for t, o, h, lo, c, v in rows:
+        assert isinstance(t, int) and t > 1_500_000_000_000          # milliseconds, not seconds
+        assert all(isinstance(x, float) for x in (o, h, lo, c, v))
+        assert lo <= min(o, c) <= max(o, c) <= h and v >= 0
+        assert 1_000 < c < 1_000_000                                 # a BTC price, not scaled
+
+
+@pytest.mark.parametrize("name", recorded("funding"))
+def test_recorded_funding_parse(name):
+    exchange = offline(name)
+    rows = exchange.parse_funding(json.loads((RESPONSES / f"{name}_funding.json").read_text()))
+
+    assert rows and all(len(row) == 2 for row in rows)
+    for t, rate in rows:
+        assert isinstance(t, int) and t > 1_500_000_000_000
+        assert isinstance(rate, float) and abs(rate) < 0.05          # per payment, not annualized
+
+
 # -------------------------------------------------------------------- live ---
 
 @pytest.mark.skipif(not os.environ.get("OVERFITTING_LIVE"), reason="set OVERFITTING_LIVE=1 to hit real exchanges")
-@pytest.mark.parametrize("exchange", ["binance", "bybit", "okx"])
+@pytest.mark.parametrize("exchange", sorted(ex.EXCHANGES))
 def test_live_download(tmp_path, exchange):
-    frame = quiet_load("BTC", "1h", start="2024-01-01", end="2024-01-03", exchange=exchange,
+    """The last two full days of BTC hourly bars, checked against Binance."""
+    end = pd.Timestamp.now(tz="UTC").floor("D").tz_localize(None)
+    start = end - pd.Timedelta(days=2)
+    frame = quiet_load("BTC", "1h", start=start, end=end, exchange=exchange, funding=True,
                        data_dir=tmp_path)["BTC"]
+    binance = quiet_load("BTC", "1h", start=start, end=end, exchange="binance", data_dir=tmp_path)["BTC"]
+
     assert len(frame) == 48
-    assert 40_000 < frame["close"].iloc[0] < 46_000
+    assert (frame["close"] / binance["close"] - 1).abs().max() < 0.01

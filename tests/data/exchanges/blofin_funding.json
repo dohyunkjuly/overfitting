@@ -1,0 +1,21 @@
+{
+  "code": "0",
+  "msg": "success",
+  "data": [
+    {
+      "instId": "BTC-USDT",
+      "fundingRate": "0.000310",
+      "fundingTime": "1704124800000"
+    },
+    {
+      "instId": "BTC-USDT",
+      "fundingRate": "0.000220",
+      "fundingTime": "1704096000000"
+    },
+    {
+      "instId": "BTC-USDT",
+      "fundingRate": "0.000198",
+      "fundingTime": "1704067200000"
+    }
+  ]
+}

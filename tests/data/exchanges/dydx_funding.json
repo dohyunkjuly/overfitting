@@ -1,0 +1,25 @@
+{
+  "historicalFunding": [
+    {
+      "ticker": "BTC-USD",
+      "rate": "0.000092",
+      "price": "42627.60258",
+      "effectiveAtHeight": "4805158",
+      "effectiveAt": "2024-01-01T02:00:00.847Z"
+    },
+    {
+      "ticker": "BTC-USD",
+      "rate": "0.000100125",
+      "price": "42451.84702",
+      "effectiveAtHeight": "4801769",
+      "effectiveAt": "2024-01-01T01:00:00.094Z"
+    },
+    {
+      "ticker": "BTC-USD",
+      "rate": "0.00009675",
+      "price": "42251.15022",
+      "effectiveAtHeight": "4798395",
+      "effectiveAt": "2024-01-01T00:00:00.358Z"
+    }
+  ]
+}

@@ -210,14 +210,14 @@ Worst Drawdowns
 
 ## Market Data
 
-`load()` downloads candles and funding rates from an exchange, saves them on your machine, and returns them ready for a backtest. Later calls read from the local copy and only download what is missing, such as bars that have closed since.
+`load()` downloads candles (and, if asked, funding rates) from an exchange, saves them on your machine, and returns them ready for a backtest. Later calls read from the local copy and only download what is missing, such as bars that have closed since.
 
 ```python
 from overfitting import Strategy
 from overfitting.market import load
 
-data = load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance")
-strategy = MyStrategy(data)
+data = load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance", funding=True)
+strategy = MyStrategy(data, funding=True)
 ```
 
 ```text
@@ -231,16 +231,42 @@ Downloading binance ETH/USDT funding rates 2023-01-01 00:00 to 2026-11-18 21:00
   4,254 funding payments saved
 ```
 
-Each symbol comes back as a DataFrame with `open`, `high`, `low`, `close`, `volume` and `funding_rate` (the rate paid at that bar's open, 0 on other bars), indexed by bar open time in UTC. Only bars that have closed are returned.
+Each symbol comes back as a DataFrame with `open`, `high`, `low`, `close`, `volume` and, with `funding=True`, `funding_rate` (the rate paid at that bar's open, 0 on other bars), indexed by bar open time in UTC. Only bars that have closed are returned.
 
 | Argument | Meaning |
 |---|---|
 | `symbols` | `"BTC"` or a list. `"BTCUSDT"`, `"BTC/USDT"` and `"BTC-USDT-SWAP"` also work; a bare name gets `quote` (default `"USDT"`) |
 | `timeframe` | `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `12h`, `1d` |
 | `start`, `end` | Dates such as `"2023-01-01"`, in UTC. `end` defaults to now |
-| `exchange` | `"binance"`, `"bybit"` or `"okx"` (USDT-margined perpetuals) |
-| `funding` | Add the `funding_rate` column (default `True`) |
+| `exchange` | Any of the 19 below (default `"binance"`) |
+| `funding` | Also download funding rates and add the `funding_rate` column (default `False`) |
 | `data_dir` | Where the data is kept. Default `~/.overfitting/data`, or the `OVERFITTING_DATA_DIR` environment variable |
+
+**Exchanges.** Each serves its own linear perpetuals; `quote` defaults to the one shown, so `load("BTC", exchange="hyperliquid")` gets BTC/USDC. History is how far back the exchange serves data today; data you download is kept, so the local store can hold more.
+
+| `exchange` | Quote | Timeframes | Candle history | Funding |
+|---|---|---|---|---|
+| `binance` | USDT | all | full | full |
+| `aster` | USDT | all | from 2021 | full |
+| `bingx` | USDT | 1m 30m 1h 2h 4h 6h 12h 1d | 1m about a year, 1h from 2024, 2h+ from 2022 | none |
+| `bitfinex` | USDT | 1m 5m 15m 30m 1h 6h 12h 1d | from 2019; minutes without trades have no bar | full (from snapshots) |
+| `bitget` | USDT | all but 2h | from 2019 | none |
+| `blofin` | USDT | all | from 2023 | full |
+| `bybit` | USDT | all | full | full |
+| `cryptocom` | USD | all but 3m | from 2021 | full, hourly |
+| `deribit` | USDC | 1m to 2h | from 2022 | full, hourly |
+| `dydx` | USD | 1m 5m 15m 30m 1h 4h 1d | from October 2023 | full, hourly |
+| `gate` | USDT | all | latest 10,000 bars (1m: about a week) | last 180 days |
+| `htx` | USDT | 1m 5m 15m 30m 1h 4h | from 2021 | none |
+| `hyperliquid` | USDC | all but 6h | latest ~5,000 bars (1m: about 3.5 days, 1h: about 7 months) | from 2023, hourly |
+| `kraken` | USD | 1m 5m 15m 30m 1h 4h 12h 1d | from 2022 | last year, hourly |
+| `kucoin` | USDT | all but 3m and 6h | 1m from late 2024, 1h from mid 2024, 1d from 2020 | full |
+| `mexc` | USDT | 1m 5m 15m 30m 1h 4h 1d | 1m about 30 days, 30m+ from 2020 | none |
+| `okx` | USDT | all | full | about 3 months |
+| `phemex` | USDT | all | from 2022 | full |
+| `woo` | USDT | all | 1m and 1h+ from 2022; 3m to 30m kept for a limited time | full |
+
+Where an exchange has no funding history, `funding_rate` is 0 and `load()` warns. It also warns when data starts later than the requested start, and when the exchange is missing bars.
 
 - The data is kept as Parquet files outside your project and virtual environment, so every project on the machine shares it: `binance/candles/1m/BTC-USDT/2024-01.parquet` (one file per month below 1h, per year above). A year of 1-minute bars is about 15 MB and loads in a few hundredths of a second.
 - With several symbols, only the bars all of them have are kept, so their timelines match. A symbol listed later trims the others, with a warning.
@@ -483,7 +509,13 @@ strategy.realized_balances   # cash per bar
 
 ## Funding Rate
 
-Add a `funding_rate` column to a symbol's DataFrame to simulate funding. A non-zero value on a bar means funding is settled at that bar's open, on the position held into it:
+Funding is off by default. To simulate it, give a symbol's DataFrame a `funding_rate` column (`load(..., funding=True)` adds one) and pass `funding=True` to the strategy:
+
+```python
+strategy = MyStrategy(data, funding=True)
+```
+
+A non-zero value on a bar means funding is settled at that bar's open, on the position held into it:
 
     payment = -position quantity × open price × funding rate
 

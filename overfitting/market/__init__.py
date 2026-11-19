@@ -1,7 +1,7 @@
 """
 Market data from exchanges.
 
-    load        download (once) and return candles and funding for a backtest
+    load        download (once) and return candles (and funding, if asked) for a backtest
     stored      what the local store holds
     downloads   the store's log: every download, and files added, changed or deleted by hand
     EXCHANGES   the supported exchanges

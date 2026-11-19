@@ -28,8 +28,9 @@ class Broker:
                  maint_margin_rate: float, 
                  maint_amount:float,
                  slippage=None,
-                 record: bool = True):
-        
+                 record: bool = True,
+                 funding: bool = False):
+
         self.data = data
         self.initial_capital = cash
         self.cash = self.initial_capital
@@ -38,6 +39,8 @@ class Broker:
         self.maint_amount = maint_amount
         # A function (order, bar) -> executed price, or None for no slippage.
         self.slippage = resolve_slippage(slippage)
+        # True settles funding from the funding_rate column; off by default.
+        self.funding = funding
         # open orders example:
         #   {
         #       btcusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
@@ -359,7 +362,8 @@ class Broker:
                     self._execute_trade(p.symbol, order, lp, True)
 
         # Funding is settled at the open, before this bar's orders fill.
-        self._apply_funding()
+        if self.funding:
+            self._apply_funding()
 
         # Execute open orders (iterate snapshots to avoid mutation issues)
         for symbol, by_id in list(self.open_orders.items()):

@@ -23,7 +23,8 @@ class Strategy:
                  maint_amount: float=0,
                  slippage=None,
                  params: Optional[dict] = None,
-                 record: bool = True):
+                 record: bool = True,
+                 funding: bool = False):
         """
         data: {symbol: DataFrame with open, high, low, close}.
         params: values for the strategy's parameters, which are its class
@@ -34,6 +35,8 @@ class Strategy:
             round trips, account and positions come back empty.
         slippage: a number (0.001 means every fill is 0.1% worse), a function
             `(order, bar) -> executed price`, or None. See overfitting.slippage.
+        funding: True settles funding from the data's `funding_rate` column.
+            Off by default: the column is ignored and no funding is paid.
         """
         for name, value in (params or {}).items():
             if not hasattr(type(self), name):
@@ -53,6 +56,7 @@ class Strategy:
             maint_amount=maint_amount,
             slippage=slippage,
             record=record,
+            funding=funding,
         )
         self.balances = []           # the curve returns are computed from
         self.equity_curve = []       # cash + unrealized PnL at each bar's close

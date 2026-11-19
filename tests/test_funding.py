@@ -14,7 +14,7 @@ FLAT = (100, 101, 99, 100)
 def make_funded_broker(bars, rates, cash=10_000.0):
     frame = make_frame(bars)
     frame["funding_rate"] = rates
-    return Broker(Data({SYMBOL: frame}), cash, 0.0, 0.005, 0, None)
+    return Broker(Data({SYMBOL: frame}), cash, 0.0, 0.005, 0, None, funding=True)
 
 
 def hold(broker, qty, bars_to_run):
@@ -80,6 +80,16 @@ def test_no_funding_column_means_no_funding():
     assert broker.funding_payments == []
 
 
+def test_funding_is_off_by_default():
+    frame = make_frame([FLAT] * 3)
+    frame["funding_rate"] = [0.0, 0.001, 0.001]
+    broker = Broker(Data({SYMBOL: frame}), 10_000, 0.0, 0.005, 0, None)
+    hold(broker, 1, 3)
+
+    assert broker.cash == 10_000
+    assert broker.funding_payments == []
+
+
 def test_flat_account_pays_nothing():
     broker = make_funded_broker([FLAT] * 3, [0.001] * 3)
     for _ in range(3):
@@ -138,7 +148,7 @@ def test_funding_flows_into_strategy_balances():
 
     frame = make_frame([FLAT] * 4)
     frame["funding_rate"] = [0.0, 0.01, 0.0, 0.01]
-    strategy = Hold(data={SYMBOL: frame}, initial_capital=10_000, commission_rate=0.0)
+    strategy = Hold(data={SYMBOL: frame}, initial_capital=10_000, commission_rate=0.0, funding=True)
     strategy.run()
 
     assert strategy.realized_balances == pytest.approx([10_000, 9_999, 9_999, 9_998])
