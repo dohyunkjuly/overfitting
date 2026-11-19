@@ -17,6 +17,10 @@
 - Backtests run about 25% faster, and about 50% faster with `record=False`.
 - New dependency: `pyarrow`.
 
+### Fixed
+
+- **Stop-limit fills.** A triggered stop-limit with room in its limit now fills at the trigger price, not the limit price (a buy stop at 100 with a limit of 105 fills at 100, not 105). Stop orders that the bar opens past fill at the open.
+
 ### Removed
 
 - `overfitting.types`. Import `OrderType` and `Status` from `overfitting.order`.

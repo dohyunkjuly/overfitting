@@ -395,26 +395,32 @@ class Broker:
                     # SHORT: Current Price <= Stop Price
                     if order.is_triggered == False:
                         # Check for the STOP order Trigger Condition
-                        if ((order.qty > 0 and high >= order.stop_price) or 
+                        if ((order.qty > 0 and high >= order.stop_price) or
                             (order.qty < 0 and low <= order.stop_price)):
                             order.is_triggered = True # Trigger the Order
+                            # The price when the stop triggers: the stop price, or the
+                            # open if the bar opened already past it.
+                            trigger = (max(order.stop_price, open) if order.qty > 0
+                                       else min(order.stop_price, open))
+
+                            if order.price is None: # STOP MARKET ORDER
+                                self._execute_trade(symbol, order, trigger)
+                                continue
+
+                            # STOP LIMIT: a limit order placed at the trigger. A buy
+                            # limit at or above the trigger (a sell limit at or below
+                            # it) fills there at once, not at the limit price.
+                            if ((order.qty > 0 and order.price >= trigger) or
+                                (order.qty < 0 and order.price <= trigger)):
+                                self._execute_trade(symbol, order, trigger)
+                                continue
 
                 if order.is_triggered == True:
                     if order.price is None: # STOP MARKET ORDER
                         self._execute_trade(symbol, order, order.stop_price)
-                    else: # STOP LIMIT ORDER
-                        if ((order.qty > 0 and low < order.price) or 
+                    else: # STOP LIMIT ORDER: resting limit, fills when the price trades through it
+                        if ((order.qty > 0 and low < order.price) or
                             (order.qty < 0 and high > order.price)):
-                            # If the order just has been created
-                            if order.created_at == pd.to_datetime(self.data.index[self._i]):
-                                # For example)
-                                # If open price is 100 and places an limit buy order 110
-                                # The order should be executed at 100 not 110
-                                if ((order.qty > 0 and order.price > open) or
-                                    (order.qty < 0 and order.price < open)):
-                                    self._execute_trade(symbol, order, open)
-                                    continue
-                            
                             self._execute_trade(symbol, order)
 
         self.recorder.on_bar_end(self._i, self)

@@ -188,6 +188,36 @@ def test_stop_limit_buy_triggers_then_fills_at_limit_price():
     assert last_trade(broker)["executed_price"] == 104
 
 
+@pytest.mark.parametrize("qty, stop, limit, bar, fill", [
+    (1, 100, 105, (98, 101, 97, 100), 100),     # buy: limit above the stop, fills at the stop
+    (-1, 95, 90, (98, 99, 94, 95), 95),         # sell: limit below the stop, fills at the stop
+    (1, 100, 100, (98, 101, 97, 100), 100),     # limit equal to the stop
+])
+def test_stop_limit_with_room_fills_at_the_trigger_not_the_limit(qty, stop, limit, bar, fill):
+    broker = make_broker([(98, 99, 97, 98), bar])
+    broker.order(SYMBOL, qty, limit, type="STOP", stop_price=stop)
+    broker.next()
+    broker.next()
+
+    assert last_trade(broker)["executed_price"] == fill
+
+
+@pytest.mark.parametrize("limit, fill", [(105, 102), (None, 102), (101, None)])
+def test_stop_opened_past_fills_at_the_open(limit, fill):
+    # Stop at 100; the second bar jumps to open at 102. A stop-market and a stop-limit
+    # with room fill at 102; a limit of 101 is now below the price and has to wait.
+    broker = make_broker([(98, 99, 97, 99), (102, 103, 101.5, 102)])
+    order = broker.order(SYMBOL, 1, limit, type="STOP", stop_price=100)
+    broker.next()
+    broker.next()
+
+    assert order.is_triggered is True
+    if fill is None:
+        assert broker.trades == []
+    else:
+        assert last_trade(broker)["executed_price"] == fill
+
+
 def test_stop_limit_triggered_but_not_filled_waits_for_limit():
     broker = make_broker([(100, 106, 104.5, 105), (105, 105, 103, 104)])
     order = broker.order(SYMBOL, 1, 104, type="STOP", stop_price=105)

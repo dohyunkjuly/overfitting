@@ -527,6 +527,8 @@ Supports four order types: LIMIT, MARKET, STOP LIMIT, and STOP MARKET. Each beha
 - For STOP Orders, the system will automatically trigger the order when:
     - Long: Price (High) >= Stop Price
     - Short: Price (Low) <= Stop Price
+- A triggered STOP MARKET order fills at the stop price, or at the open if the bar opened past it.
+- A triggered STOP LIMIT order becomes a limit order at that price. If the limit leaves room (a buy limit at or above it, a sell limit at or below it), it fills there at once; otherwise it waits for the price to trade through the limit.
 - **Stop Order Immediate Rejection Rule**: If a STOP LIMIT or STOP MARKET order would trigger immediately upon creation (because the current price already breaches the stop price), the system rejects the order with "STOP order would Immediately Trigger" message.
  
 ```python
