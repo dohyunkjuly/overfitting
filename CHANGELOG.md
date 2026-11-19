@@ -4,78 +4,70 @@
 
 ### Added
 
-- **Market data download.** `overfitting.market.load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance")` downloads candles and funding rates from 19 exchanges (Binance, Aster, BingX, Bitfinex, Bitget, BloFin, Bybit, Crypto.com, Deribit, dYdX, Gate, HTX, Hyperliquid, Kraken, KuCoin, MEXC, OKX, Phemex, WOO X) and returns `{symbol: DataFrame}` ready for a Strategy, with funding on the bar it is paid at. Data is saved as Parquet files under `~/.overfitting/data` (or `OVERFITTING_DATA_DIR`), one per symbol and month (below 1h) or year, so later calls only download what is missing, and interrupted downloads resume. A catalog (`catalog.sqlite`) records what is held and logs every download; `stored()` and `downloads()` show them. Files deleted by hand are downloaded again, and valid Parquet files added by hand are used. The connectors use only the Python standard library; storage adds one dependency, `pyarrow`.
-- **Parameter optimizer.** `optimize(MyStrategy, data, params={...}, maximize="sharpe_ratio")` runs a grid or random search over a strategy's parameters, in parallel on macOS and Linux. By default the search only sees the first 70% of the data, and the result shows the winner's metrics on the held-out 30% next to its train metrics, with the number of trials. `result.table` lists every combination and `result.heatmap(x, y)` gives a grid of two parameters.
-- **Strategy parameters.** Parameters are class attributes; `MyStrategy(data, params={"fast": 10})` overrides them for one run.
-- `Strategy(record=False)` skips recording round trips and per-bar history, for runs where only the returns matter.
-- `Strategy` accepts an already prepared `Data` object, so many runs can share one.
-
-### Removed
-
-- The module `overfitting.types`. `OrderType` and `Status` now live in `overfitting.order` with `Order`: `from overfitting.order import OrderType`. Orders also accept the type as a string, e.g. `type="LIMIT"`.
-- `CustomError` and the unused `InvalidOrderType` from `overfitting.errors`. Every error now derives from the new `OverfittingError`, so `except OverfittingError` catches anything the library raises; messages containing `{` or `}` no longer break when printed. `EmptyOrderParameters` is now a kind of `InvalidOrderParameters`.
-- **The deprecated indicator and slippage API.** `Strategy.indicator()`, the indicator classes (`Indicator`, `SMA`, `EMA`, `WMA`, `RSI`, `MACD`, `Stochastic`, `BollingerBands`, `ATR`), the `slippage_model=` argument and `Slippage.FixedPercent / Skewed / Zero` are gone, earlier than the 1.0 announced in 0.5.0. Use `self.I(sma, close, 20)` with the functions in `overfitting.indicators`, and `slippage=0.001` or a function `(order, bar) -> price`.
+- **Market data.** `overfitting.market.load(["BTC/USDT", "ETH/USDT"], "1h", start="2023-01-01")` downloads candles, and optionally funding rates, from 19 exchanges. Data is saved locally, so later calls only download what is missing. `stored()` shows what is saved; `downloads()` lists every download.
+- **Parameter optimizer.** `optimize(MyStrategy, data, params={...})` runs a grid or random search in parallel. It tunes on the first 70% of the data and reports the winner on the remaining 30%. See `result.table` and `result.heatmap(x, y)`.
+- **Strategy parameters.** Parameters are class attributes; override them with `MyStrategy(data, params={"fast": 10})`.
+- `Strategy(record=False)` skips detailed recording for faster runs.
+- `Strategy` accepts a prepared `Data` object, so runs can share one.
 
 ### Changed
 
-- **Funding is off by default.** A `funding_rate` column is now only settled with `Strategy(data, funding=True)`; before, any data with the column paid funding. The same data can be run with and without funding. `load()` likewise only downloads funding rates with `funding=True`.
-- New dependency: `pyarrow`, for the Parquet files of downloaded data.
-- **Shorter printed summary.** About 120 lines down to 87. Dropped duplicates (Annualized Mean Return, Sharpe standard error, R-squared, percentage versions of average win and loss, Average Net Exposure, Average Distance to Liquidation, Liquidation Loss), niche numbers (Kelly fraction, Expectancy (R), System Quality Number, Days Needed To Confirm Sharpe, autocorrelation, Pain Index, Martin ratio, 99% VaR and Expected Shortfall, average drawdown duration and recovery time, median and longest holding time, Days Beating Benchmark) and made-up ones (drawdown counts by depth, Profit From Best 5 Trades, Profit Captured, Average Profit Given Back, Break-Even Commission Multiple, Average Cost per Fill, Edge Ratio). The Sharpe confidence interval is one line, "Sharpe 95% Range  0.05 to 2.89". Standard functions such as `kelly_fraction()` and `minimum_track_record_length()` stay in `overfitting.analysis.metrics`; `metrics.summary()` returns what the report prints, and `exposure_summary()` no longer takes `round_trips`.
-- Backtests run faster: reading indicators inside `next()` and building the returns series do less work. The SMA example went from about 90 ms to 68 ms per run, and to 47 ms with `record=False`. Results are unchanged.
+- **Funding is off by default.** Pass `funding=True` to `Strategy` and to `load()`.
+- **Shorter printed summary** (about 120 lines down to 87). Duplicate and rarely used metrics were dropped; they remain available in `overfitting.analysis.metrics`.
+- Backtests run about 25% faster, and about 50% faster with `record=False`.
+- New dependency: `pyarrow`.
+
+### Removed
+
+- `overfitting.types`. Import `OrderType` and `Status` from `overfitting.order`.
+- `CustomError` and `InvalidOrderType`. All errors now derive from `OverfittingError`.
+- The deprecated indicator classes, `Strategy.indicator()`, `slippage_model=` and `Slippage`. Use `self.I(sma, close, 20)` and `slippage=0.001`.
 
 ## 0.5.0 (2026-11-18)
 
-This release fixes correctness problems in the engine. **Backtest results will change**: Sharpe, drawdown and other return statistics move for any strategy that holds positions across bars, and strategies that were over-sized or liquidated will end with different balances.
-
-It also replaces the analysis package and redesigns how indicators and slippage are written. The old indicator and slippage style keeps working with a deprecation warning.
+This release fixes correctness problems in the engine, so **backtest results will change**.
 
 ### Changed
 
-- **Equity is marked to market.** `Strategy.run()` now bases returns on cash plus the unrealized PnL of open positions at each bar's close. Before, the curve only moved when a trade closed, which hid drawdowns on open positions. Pass `run(mark_to_market=False)` for the old realized-only curve. Both are always available as `strategy.equity_curve` and `strategy.realized_balances`.
-- **Orders are checked against available margin.** An order that opens or increases a position needs `price × qty / leverage` of free margin (cash minus margin locked in open positions). `InsufficientMargin` is raised at placement; a resting order that is no longer affordable when it fills is dropped and listed in `strategy.fetch_rejected_orders()`. Reducing and closing orders are always accepted. Before, any size was accepted.
-- **Liquidation loses the initial margin, no more.** Before, a liquidation charged initial margin plus maintenance margin plus commission, which is more than was posted for the position. `Position.margin` is now the initial margin only. The liquidation price formula is unchanged.
-- **The printed report now shows 74 metrics in seven sections** (Overview, Returns, Risk, Drawdown, Sharpe Ratio Reliability, Benchmark, Trades) instead of 23 lines. The raw values are available as `Report.metrics`.
-- **Trade statistics now count completed trades, not fills.** A win is a round trip with positive net PnL after commission and funding; before, each closing fill was counted and judged before commission. `Winning Trades`, `Losing Trades`, `Win Rate (%)`, `Avg Return (%)`, `Avg Profit (%)` and `Avg Loss (%)` are replaced by the new Trades section.
-- Report lines that changed meaning: `Cumulative Return` (a growth factor) is replaced by `Total Return` (a percentage); `Skew` and `Kurtosis` are now measured on daily returns and kurtosis is reported as excess kurtosis, where they were measured on monthly returns before; `Daily Value At Risk` (two standard deviations below the mean) is replaced by historical value at risk at 95% and 99%.
-- Drawdown duration is counted in calendar days (crypto trades every day) and the column is named `Duration (days)`. It was counted in business days before.
-- Minimum pandas version is now 2.2.
-- **Charts.** `strategy.plot()` shows 13 charts in the same style as before. The daily returns chart is removed. `save_path` now saves each chart as `.png` (it was `.jpg`). `seaborn` and `plotly` are no longer dependencies.
+- **Equity is marked to market.** Returns now include unrealized PnL at each bar's close. Use `run(mark_to_market=False)` for the old realized-only curve.
+- **Orders need enough margin.** Orders that open or increase a position raise `InsufficientMargin` when free margin is short.
+- **Liquidation loses the initial margin only.** It used to also charge maintenance margin and commission.
+- **Trade statistics count completed trades, not fills**, and include commission and funding.
+- **New printed report** with seven sections instead of 23 lines. Values are in `Report.metrics`.
+- Some report lines changed meaning: `Total Return` replaces `Cumulative Return`; skew and kurtosis use daily returns; value at risk is historical.
+- Drawdown duration is counted in calendar days.
+- **Charts.** `strategy.plot()` shows 13 charts and saves them as `.png`. `seaborn` and `plotly` are no longer needed.
+- Minimum pandas version is 2.2.
 
 ### Added
 
-- **Funding rate.** An optional `funding_rate` column settles funding at the open of each bar where it is non-zero. Payments are listed in `strategy.fetch_funding()`.
-- Liquidations are flagged in the trade log (`is_liquidation_order`).
-- `Strategy.get_equity()`, `Strategy.get_available_margin()`, `Broker.equity()`, `Broker.unrealized_pnl()`, `Broker.available_margin()`, `Broker.required_margin()`, `Position.unrealized_pnl()`.
-- **Indicators are plain functions, read relative to the current bar.** Declare one with `self.I(sma, close, 20)` and read it in `next()` as `self.fast[-1]` (the last completed bar). Bars that have not finished cannot be read, so indicators no longer shift their output. New functions in `overfitting.indicators`: `sma`, `ema`, `wma`, `rsi`, `macd`, `stochastic`, `bollinger`, `atr`, `donchian`, plus `crossover` and `crossunder`.
-- `next()` can be written without the bar index. `self.i` gives the index and `self.price(symbol)` the current bar's open.
-- **Slippage is a number or a function.** `slippage=0.001` means every fill is 0.1% worse; any function `(order, bar) -> price` is a custom model. `overfitting.slippage` provides `fixed_percent` and `skewed`.
-- **Trade, cost, exposure and order analysis.** `overfitting.analysis.metrics` also computes results per completed trade (win rate by side, payoff ratio, profit factor, expectancy, system quality number, holding times, streaks, share of profit from the best trades), trade quality from adverse and favourable excursion, costs (commission, slippage, funding, break-even commission, turnover), exposure (time in market, leverage, margin usage, distance to liquidation) and order outcomes, plus tables by symbol, weekday and hour.
-- The printed report gains five sections (Trades, Trade Quality, Costs, Exposure and Margin, Orders) and a per-symbol table.
-- **Round trips.** `strategy.fetch_round_trips()` returns one row per completed trade (flat to flat, or to a flip) with entry and exit, holding time, gross PnL, commission, funding, net PnL, and the maximum adverse and favourable excursion.
-- **Per-bar history.** `strategy.fetch_account_history()` (cash, equity, margin, gross and net exposure, leverage) and `strategy.fetch_position_history(symbol)` (size, entry price, exposure, margin, liquidation price, unrealized PnL).
-- **Order status.** `strategy.fetch_orders()` lists every order placed with a `status` of `OPEN`, `FILLED`, `CANCELLED` or `REJECTED`. Orders rejected at placement are now kept in this log with a `reject_reason`. Each fill records its `slippage` cost. The trade log gains `status`, `slippage`, `cancelled_at` and `reject_reason` columns.
-- **Six new charts**: yearly returns, return quantiles (box plot of daily, weekly and monthly returns), rolling beta (with a benchmark), profit per trade, the cost breakdown (commission, slippage, funding), and distance to liquidation. Every chart is also a function in `overfitting.analysis.plots` that returns a matplotlib figure.
-- `overfitting.analysis.metrics`: about 70 performance metrics written from their definitions (returns, risk, drawdown, benchmark comparison, rolling statistics, and the statistical significance of the Sharpe ratio). First part of the new analysis package that will replace the pyfolio-derived code.
+- **Funding rate.** A `funding_rate` column settles funding at the bar's open. See `strategy.fetch_funding()`.
+- **Indicators as functions.** `self.I(sma, close, 20)`, read as `self.fast[-1]`. Functions live in `overfitting.indicators`.
+- **Slippage as a number or function.** `slippage=0.001`, or any `(order, bar) -> price`.
+- **Trade analysis.** `fetch_round_trips()`, `fetch_account_history()`, `fetch_position_history()` and `fetch_orders()`.
+- Trade, cost, exposure and order metrics in `overfitting.analysis.metrics`.
+- Six new charts, each also a function in `overfitting.analysis.plots`.
+- Liquidations are flagged in the trade log.
+- Equity and margin helpers: `get_equity()`, `get_available_margin()`.
+- `next()` can be written without the bar index.
 
 ### Deprecated
 
-These still work and emit a `DeprecationWarning`. They will be removed in 1.0.
-
-- `Strategy.indicator(...)` and the indicator classes (`SMA`, `EMA`, `WMA`, `RSI`, `MACD`, `Stochastic`, `BollingerBands`, `ATR`): use `Strategy.I` with the functions.
-- `slippage_model=` and `Slippage.FixedPercent / Skewed / Zero`: use `slippage=`.
+- The indicator classes and `Strategy.indicator()`. Use `Strategy.I`.
+- `slippage_model=` and `Slippage`. Use `slippage=`.
 
 ### Fixed
 
-- `Broker.order()` crashed when `type` was omitted. It now defaults to a limit order and also accepts an `OrderType`.
-- Timezone-aware timestamps are converted to naive ones as documented.
-- `Broker.initial_captial` is renamed `initial_capital`. The old name still works and emits a `DeprecationWarning`.
-- Benchmark daily returns were shifted by one day against the strategy's when the benchmark had intraday data. This only affected the benchmark lines on the rolling charts before; it would have made the new benchmark metrics wrong.
+- `Broker.order()` crashed when `type` was omitted.
+- Timezone-aware timestamps are now converted to naive ones.
+- `initial_captial` typo renamed to `initial_capital`; the old name still works.
+- Benchmark returns were shifted by one day for intraday data.
 
 ### Removed
 
-- `overfitting/analysis/graph.py`, which was derived from pyfolio (Apache 2.0). The package no longer contains third-party code.
+- `analysis/graph.py`. The package no longer contains third-party code.
 
 ### Project
 
-- Added a pytest suite (420 tests) and GitHub Actions CI on Python 3.10 to 3.13.
-- `requires-python` raised to 3.10, the lowest version the code imports on.
+- Added a pytest suite and GitHub Actions CI on Python 3.10 to 3.13.
+- `requires-python` is now 3.10.

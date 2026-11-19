@@ -3,7 +3,7 @@ load(): market data ready for a backtest, downloaded only when needed.
 
     from overfitting.market import load
 
-    data = load(["BTC", "ETH"], "1h", start="2023-01-01")
+    data = load(["BTC/USDT", "ETH/USDT"], "1h", start="2023-01-01")
     strategy = MyStrategy(data)
 
 The first call downloads from the exchange and saves to the local store.
@@ -20,6 +20,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from overfitting.errors import ExchangeError
 from overfitting.market.exchanges import TIMEFRAMES, get_exchange
 from overfitting.market.store import Store
 
@@ -28,29 +29,35 @@ QUOTES = ("USDT", "USDC", "USD")
 SETTLE_MS = 30_000
 
 
-def parse_symbol(text: str, quote: str = "USDT") -> tuple[str, str]:
+def parse_symbol(text: str, default_quote: str = "USDT") -> tuple[str, str]:
     """
-    (base, quote) from the ways people write a perpetual:
-    "BTC", "btc", "BTCUSDT", "BTC/USDT", "BTC-USDT", "BTC/USDT:USDT", "BTC-USDT-SWAP".
-    A bare asset name gets `quote`.
+    (base, quote) from a symbol written BASE/QUOTE, such as "BTC/USDT", the way
+    ccxt writes it. Case does not matter. Anything else raises ValueError with
+    the BASE/QUOTE form to use, a bare name getting `default_quote`.
     """
-    s = text.strip().upper()
-    s = s.split(":")[0]
+    if isinstance(text, str):
+        base, slash, quote = text.strip().upper().partition("/")
+        if slash and base.isalnum() and quote.isalnum():
+            return base, quote
+    raise ValueError(f'Write symbols as BASE/QUOTE: "{_suggest(text, default_quote)}", '
+                     f"not {text!r}.")
+
+
+def _suggest(text, default_quote: str) -> str:
+    """The BASE/QUOTE form someone probably meant by "BTC", "BTCUSDT" or "BTC-USDT-SWAP"."""
+    s = str(text).strip().upper().split(":")[0]
     for suffix in ("-SWAP", "-PERP", "PERP"):
         if s.endswith(suffix) and len(s) > len(suffix):
             s = s[: -len(suffix)]
-    s = s.rstrip("-_/")
+    s = s.strip("-_/")
     for separator in ("/", "-", "_"):
-        if separator in s:
-            base, _, q = s.partition(separator)
-            if base and q:
-                return base, q
-    for q in QUOTES:
-        if s.endswith(q) and len(s) > len(q):
-            return s[: -len(q)], q
-    if not s.isalnum():
-        raise ValueError(f"Cannot read a symbol from {text!r}.")
-    return s, quote.upper()
+        base, found, quote = s.partition(separator)
+        if found and base and quote:
+            return f"{base}/{quote}"
+    for quote in QUOTES:
+        if s.endswith(quote) and len(s) > len(quote):
+            return f"{s[: -len(quote)]}/{quote}"
+    return f"{s or 'BTC'}/{default_quote}"
 
 
 def _to_ms(value, name: str) -> int:
@@ -123,19 +130,17 @@ def _funding_column(index: pd.DatetimeIndex, records: np.ndarray, step: int) -> 
 
 
 def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=None, *,
-         exchange: str = "binance", quote: str | None = None, funding: bool = False,
+         exchange: str = "binance", funding: bool = False,
          data_dir=None, progress: bool = True) -> dict[str, pd.DataFrame]:
     """
     Candles for one or more perpetual futures, ready to pass to a Strategy.
 
-    symbols     "BTC", or a list such as ["BTC", "ETH"]. "BTCUSDT", "BTC/USDT"
-                and "BTC-USDT-SWAP" work too.
+    symbols     "BTC/USDT", or a list such as ["BTC/USDT", "ETH/USDT"]: BASE/QUOTE,
+                as in ccxt. Every symbol is a linear perpetual.
     timeframe   one of 1m 3m 5m 15m 30m 1h 2h 4h 6h 12h 1d
     start, end  dates such as "2023-01-01" (UTC). `end` defaults to now; only
                 bars that have closed are returned.
     exchange    a name from EXCHANGES, such as "binance", "bybit" or "okx"
-    quote       quote currency for bare names like "BTC"; default USDT, or the
-                exchange's own (USDC on Hyperliquid, USD on dYdX)
     funding     also download funding rates and add a `funding_rate` column:
                 the rate paid at each bar's open, 0 on bars without a payment
     data_dir    where the store lives; default ~/.overfitting/data, or the
@@ -143,18 +148,20 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
     progress    print what is being downloaded
 
     Returns {symbol: DataFrame} with columns open, high, low, close, volume
-    (and funding_rate), indexed by bar open time, keyed by the names given.
+    (and funding_rate), indexed by bar open time, keyed by symbol ("BTC/USDT").
     With several symbols, only the bars all of them have are kept, so their
     timelines match.
     """
     if timeframe not in TIMEFRAMES:
         raise ValueError(f"Unknown timeframe {timeframe!r}. Use one of {', '.join(TIMEFRAMES)}.")
     if start is None:
-        raise ValueError('Give a start date, e.g. load("BTC", "1h", start="2023-01-01").')
+        raise ValueError('Give a start date, e.g. load("BTC/USDT", "1h", start="2023-01-01").')
+    connector = get_exchange(exchange)
     names = [symbols] if isinstance(symbols, str) else list(symbols)
     if not names:
         raise ValueError("Give at least one symbol.")
-    if len(set(names)) != len(names):
+    pairs = [parse_symbol(name, connector.default_quote) for name in names]
+    if len(set(pairs)) != len(pairs):
         raise ValueError("A symbol is listed twice.")
 
     step = TIMEFRAMES[timeframe]
@@ -164,14 +171,18 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
     if end_ms <= start_ms:
         raise ValueError("No closed bars between start and end.")
 
-    connector = get_exchange(exchange)
-    pairs = {name: parse_symbol(name, quote or connector.default_quote) for name in names}
-
     frames = {}
     with Store(data_dir) as store:
-        for name, (base, q) in pairs.items():
+        for base, q in pairs:
             key = f"{base}/{q}"
-            _sync_candles(store, connector, base, q, timeframe, start_ms, end_ms, progress)
+            try:
+                _sync_candles(store, connector, base, q, timeframe, start_ms, end_ms, progress)
+            except ExchangeError as error:
+                hint = f'try "{base}/{connector.default_quote}"'
+                if q == connector.default_quote or hint in str(error):
+                    raise
+                raise ExchangeError(f"{error} {connector.name} perpetuals are quoted in "
+                                    f"{connector.default_quote}; {hint}.") from error
             candles = store.candles(connector.name, key, timeframe, start_ms, end_ms)
             if not len(candles):
                 raise ValueError(f"{connector.name} has no {key} {timeframe} candles between "
@@ -205,7 +216,7 @@ def load(symbols: str | Iterable[str], timeframe: str = "1h", start=None, end=No
                 warnings.warn(f"{key}: {int(expected - len(candles)):,} bars are missing between "
                               f"{_day(int(candles[0, 0]))} and {_day(int(candles[-1, 0]))} "
                               "(the exchange has no data for them).", stacklevel=2)
-            frames[name] = frame
+            frames[key] = frame
 
     if len(frames) > 1:
         common = None

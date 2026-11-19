@@ -8,7 +8,7 @@ Market data from exchanges.
 
     from overfitting.market import load
 
-    data = load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance")
+    data = load(["BTC/USDT", "ETH/USDT"], "1h", start="2023-01-01", exchange="binance")
 """
 from overfitting.errors import ExchangeError
 from overfitting.market.exchanges import EXCHANGES, TIMEFRAMES

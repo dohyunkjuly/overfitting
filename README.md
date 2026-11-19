@@ -216,7 +216,7 @@ Worst Drawdowns
 from overfitting import Strategy
 from overfitting.market import load
 
-data = load(["BTC", "ETH"], "1h", start="2023-01-01", exchange="binance", funding=True)
+data = load(["BTC/USDT", "ETH/USDT"], "1h", start="2023-01-01", exchange="binance", funding=True)
 strategy = MyStrategy(data, funding=True)
 ```
 
@@ -235,14 +235,14 @@ Each symbol comes back as a DataFrame with `open`, `high`, `low`, `close`, `volu
 
 | Argument | Meaning |
 |---|---|
-| `symbols` | `"BTC"` or a list. `"BTCUSDT"`, `"BTC/USDT"` and `"BTC-USDT-SWAP"` also work; a bare name gets `quote` (default `"USDT"`) |
+| `symbols` | `"BTC/USDT"` or a list, written BASE/QUOTE as in ccxt. The result is keyed the same way: `data["BTC/USDT"]` |
 | `timeframe` | `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `12h`, `1d` |
 | `start`, `end` | Dates such as `"2023-01-01"`, in UTC. `end` defaults to now |
 | `exchange` | Any of the 19 below (default `"binance"`) |
 | `funding` | Also download funding rates and add the `funding_rate` column (default `False`) |
 | `data_dir` | Where the data is kept. Default `~/.overfitting/data`, or the `OVERFITTING_DATA_DIR` environment variable |
 
-**Exchanges.** Each serves its own linear perpetuals; `quote` defaults to the one shown, so `load("BTC", exchange="hyperliquid")` gets BTC/USDC. History is how far back the exchange serves data today; data you download is kept, so the local store can hold more.
+**Exchanges.** Each serves its own linear perpetuals, quoted in the currency shown: `load("BTC/USDC", exchange="hyperliquid")`, `load("BTC/USD", exchange="dydx")`. Asking for the wrong quote raises an error that names the right one. History is how far back the exchange serves data today; data you download is kept, so the local store can hold more.
 
 | `exchange` | Quote | Timeframes | Candle history | Funding |
 |---|---|---|---|---|

@@ -77,8 +77,8 @@ class Exchange:
     funding_limit    most funding records one request may return
     pause            seconds to wait between requests (rate limit)
     method           "GET" (parameters in the URL) or "POST" (parameters as a JSON body)
-    default_quote    quote currency for bare names like "BTC" (USDT, or USDC/USD
-                     on exchanges that settle in those)
+    default_quote    the quote currency of its perpetuals (USDT, or USDC/USD on
+                     exchanges that settle in those), suggested in error messages
 
     While a download runs, `self.current` holds the exchange's symbol, so
     parse_* can look up per-symbol details such as contract size.
@@ -786,7 +786,8 @@ class Hyperliquid(Exchange):
 
     def symbol(self, base, quote):
         if quote != "USDC":
-            raise ExchangeError(f"hyperliquid: perpetuals settle in USDC, not {quote}.")
+            raise ExchangeError(f'hyperliquid: perpetuals settle in USDC, not {quote}; '
+                                f'try "{base}/USDC".')
         if self._coins is None:
             meta = self._request(self.candles_url, {"type": "meta"})
             self._coins = {c["name"].upper(): c["name"] for c in meta["universe"]}
