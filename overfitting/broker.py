@@ -48,6 +48,10 @@ class Broker:
         #   }
         self.open_orders: Dict[str, Dict[str, Order]] = {}
         self.position: Dict[str, Position] = {} 
+        # Symbols with an open position, in the order their positions were created.
+        # Rebuilt only when a position opens or closes, so the per-bar loops skip
+        # symbols that are flat.
+        self._held: List[str] = []
 
         self.trades = []
         self.funding_payments = []
@@ -256,10 +260,7 @@ class Broker:
         """Unrealized PnL of all open positions, marked at the close of bar `i`."""
         if i is None:
             i = min(self._i, len(self.data) - 1)
-        return sum(
-            p.unrealized_pnl(self._close(s, i))
-            for s, p in self.position.items() if p.qty != 0
-        )
+        return sum(self.position[s].unrealized_pnl(self._close(s, i)) for s in self._held)
 
     def equity(self, i: Optional[int] = None) -> float:
         """Cash plus unrealized PnL, marked at the close of bar `i`."""
@@ -272,9 +273,8 @@ class Broker:
         A non-zero value in the `funding_rate` column means funding is paid at
         the open of that bar. Longs pay shorts when the rate is positive.
         """
-        for symbol, position in self.position.items():
-            if position.qty == 0:
-                continue
+        for symbol in self._held:
+            position = self.position[symbol]
             rates = getattr(self._d(symbol), FUNDING_COLUMN, None)
             if rates is None:
                 continue
@@ -329,6 +329,8 @@ class Broker:
             commission = notional * self.commission_rate
         qty_before = position.qty
         pnl = position.process_trade(order, liquidation)
+        if (position.qty != 0) != (symbol in self._held):
+            self._held = [s for s, p in self.position.items() if p.qty != 0]
         executed_time = pd.to_datetime(self.data.index[self._i])
 
         # Update Order fields as it has been filled
@@ -351,7 +353,8 @@ class Broker:
 
     def next(self):
         if self._i != 0: # Check Liquidation
-            for s, p in list(self.position.items()):
+            for s in self._held:          # a liquidation rebuilds _held; this loop keeps the old list
+                p = self.position[s]
                 _, prev_high, prev_low, _ = self._bars(s, self._i - 1)
                 lp = p.liquid_price
                 # Check Liquidation Condition
@@ -367,6 +370,8 @@ class Broker:
 
         # Execute open orders (iterate snapshots to avoid mutation issues)
         for symbol, by_id in list(self.open_orders.items()):
+            if not by_id:
+                continue
             open, high, low, _ = self._bars(symbol, self._i)
 
             for _, order in list(by_id.items()):

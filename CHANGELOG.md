@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Faster backtests with many symbols.** Each bar now skips symbols with no position and no open orders. A 50-symbol backtest where 3 symbols trade runs about 3x faster; single-symbol backtests about 1.2x. Results are unchanged.
+
 ## 0.6.0 (2026-11-19)
 
 ### Added

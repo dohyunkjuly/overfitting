@@ -45,9 +45,18 @@ class Recorder:
         self._open: dict[str, dict] = {}   # symbol -> the round trip in progress
 
         self._account = {f: np.full(n, np.nan) for f in ACCOUNT_FIELDS}
-        self._positions = {
-            symbol: {f: np.full(n, np.nan) for f in POSITION_FIELDS} for symbol in data.symbols
-        }
+        # Filled in advance as if every symbol were flat on every bar; on_bar_end
+        # then only writes the symbols that hold a position.
+        self._positions = {}
+        for symbol in data.symbols:
+            fields = {f: np.zeros(n) for f in ("qty", "exposure", "margin", "unrealized_pnl")}
+            fields["close"] = np.asarray(data[symbol].close, dtype=float).copy()
+            fields["entry_price"] = np.full(n, np.nan)       # NaN while flat
+            fields["liquidation_price"] = np.full(n, np.nan)
+            self._positions[symbol] = {f: fields[f] for f in POSITION_FIELDS}
+        self._rank = {symbol: k for k, symbol in enumerate(data.symbols)}
+        self._held_source = None      # broker._held the order below was computed from
+        self._held_order: list[str] = []
 
     # ------------------------------------------------------------ round trips ---
 
@@ -181,19 +190,16 @@ class Recorder:
     # ------------------------------------------------------------ per-bar state ---
 
     def on_bar_end(self, i: int, broker) -> None:
-        """Snapshot the account and every position at the close of bar `i`."""
+        """Snapshot the account and every open position at the close of bar `i`."""
+        if broker._held is not self._held_source:     # a position opened or closed
+            self._held_source = broker._held
+            self._held_order = sorted((s for s in broker._held if s in self._rank),
+                                      key=self._rank.__getitem__)
         margin = gross = net = unrealized_total = 0.0
-        for symbol, fields in self._positions.items():
-            position = broker.position.get(symbol)
-            close = float(broker._close(symbol, i))
-            fields["close"][i] = close
-            if position is None or position.qty == 0:
-                fields["qty"][i] = 0.0
-                fields["exposure"][i] = 0.0
-                fields["margin"][i] = 0.0
-                fields["unrealized_pnl"][i] = 0.0
-                continue  # entry and liquidation price stay NaN while flat
-
+        for symbol in self._held_order:
+            fields = self._positions[symbol]
+            position = broker.position[symbol]
+            close = fields["close"][i]
             qty = float(position.qty)
             exposure = qty * close
             unrealized = position.unrealized_pnl(close)
