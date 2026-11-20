@@ -85,6 +85,11 @@ class Broker:
     def _d(self, symbol: str):
         return self.data[symbol]
 
+    def _time(self, i: int) -> pd.Timestamp:
+        # data.index holds tz-naive datetime64 values, so pd.Timestamp gives the
+        # same result as pd.to_datetime at a fraction of the cost.
+        return pd.Timestamp(self.data.index[i])
+
     def _bars(self, symbol: str, i: int) -> Tuple:
         d = self._d(symbol)
         return d.open[i], d.high[i], d.low[i], d.close[i]
@@ -141,8 +146,7 @@ class Broker:
         if type == OrderType.LIMIT and price is None:
             raise EmptyOrderParameters("price must be given for a LIMIT order.")
 
-        timestamp = pd.to_datetime(self.data.index[self._i])
-        order = Order(timestamp, symbol, qty, price, type, stop_price, label)
+        order = Order(self._time(self._i), symbol, qty, price, type, stop_price, label)
         self.orders.append(order)
 
         try:
@@ -186,7 +190,7 @@ class Broker:
 
     def _mark_cancelled(self, order: Order) -> None:
         order.status = Status.CANCELLED
-        order.cancelled_at = pd.to_datetime(self.data.index[min(self._i, len(self.data) - 1)])
+        order.cancelled_at = self._time(min(self._i, len(self.data) - 1))
 
     def cancel_all_orders(self, symbol: str):
         if symbol not in self.open_orders:
@@ -287,7 +291,7 @@ class Broker:
             self.cash += amount
             self.recorder.on_funding(symbol, amount)
             self.funding_payments.append({
-                "time": pd.to_datetime(self.data.index[self._i]),
+                "time": self._time(self._i),
                 "symbol": symbol,
                 "qty": float(position.qty),
                 "price": price,
@@ -331,7 +335,7 @@ class Broker:
         pnl = position.process_trade(order, liquidation)
         if (position.qty != 0) != (symbol in self._held):
             self._held = [s for s, p in self.position.items() if p.qty != 0]
-        executed_time = pd.to_datetime(self.data.index[self._i])
+        executed_time = self._time(self._i)
 
         # Update Order fields as it has been filled
         order.pnl = pnl
@@ -384,7 +388,7 @@ class Broker:
                     if ((order.qty > 0 and low < order.price) or 
                         (order.qty < 0 and high > order.price)):
                         # If the order just has been created
-                        if order.created_at == pd.to_datetime(self.data.index[self._i]):
+                        if order.created_at == self._time(self._i):
                             # For example)
                             # If open price is 100 and places an limit buy order 110
                             # The order should be executed at 100 not 110

@@ -5,6 +5,7 @@
 ### Changed
 
 - **Faster backtests with many symbols.** Each bar now skips symbols with no position and no open orders. A 50-symbol backtest where 3 symbols trade runs about 3x faster; single-symbol backtests about 1.2x. Results are unchanged.
+- **Faster fills and funding.** Recording the time of a fill, cancel or funding payment is now about 20x cheaper. Backtests run 1.2x to 1.6x faster, more with many trades or funding payments. Results are unchanged.
 
 ## 0.6.0 (2026-11-19)
 
