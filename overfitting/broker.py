@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
@@ -52,6 +53,9 @@ class Broker:
         # Rebuilt only when a position opens or closes, so the per-bar loops skip
         # symbols that are flat.
         self._held: List[str] = []
+        # Each symbol's funding_rate array (None without the column), looked up once.
+        self._rates = {s: getattr(data[s], FUNDING_COLUMN, None) for s in data.symbols}
+        self._funding_bars = None   # True where any symbol has a funding rate; built on first use
 
         self.trades = []
         self.funding_payments = []
@@ -91,7 +95,7 @@ class Broker:
         return pd.Timestamp(self.data.index[i])
 
     def _bars(self, symbol: str, i: int) -> Tuple:
-        d = self._d(symbol)
+        d = self.data[symbol]
         return d.open[i], d.high[i], d.low[i], d.close[i]
 
     def _open(self, symbol: str, i: int):
@@ -264,11 +268,23 @@ class Broker:
         """Unrealized PnL of all open positions, marked at the close of bar `i`."""
         if i is None:
             i = min(self._i, len(self.data) - 1)
-        return sum(self.position[s].unrealized_pnl(self._close(s, i)) for s in self._held)
+        # Same sum as Position.unrealized_pnl, inlined: every held position has qty != 0.
+        data, position = self.data, self.position
+        return sum([(data[s].close[i] - position[s].price) * float(position[s].qty)
+                    for s in self._held])
 
     def equity(self, i: Optional[int] = None) -> float:
         """Cash plus unrealized PnL, marked at the close of bar `i`."""
         return self.cash + self.unrealized_pnl(i)
+
+    def _find_funding_bars(self) -> np.ndarray:
+        """Bars where any symbol has a non-zero funding rate; the rest can't settle anything."""
+        bars = np.zeros(len(self.data), dtype=bool)
+        for rates in self._rates.values():
+            if rates is not None:
+                r = pd.to_numeric(pd.Series(rates), errors="coerce").to_numpy(dtype=float)
+                bars |= (r != 0) & ~np.isnan(r)
+        return bars
 
     def _apply_funding(self) -> None:
         """
@@ -277,16 +293,17 @@ class Broker:
         A non-zero value in the `funding_rate` column means funding is paid at
         the open of that bar. Longs pay shorts when the rate is positive.
         """
+        i = self._i
         for symbol in self._held:
-            position = self.position[symbol]
-            rates = getattr(self._d(symbol), FUNDING_COLUMN, None)
+            rates = self._rates[symbol]
             if rates is None:
                 continue
-            rate = rates[self._i]
+            rate = rates[i]
             if rate is None or rate != rate or rate == 0:  # rate != rate catches NaN
                 continue
 
-            price = self._open(symbol, self._i)
+            position = self.position[symbol]
+            price = self.data[symbol].open[i]
             amount = -float(position.qty) * price * float(rate)
             self.cash += amount
             self.recorder.on_funding(symbol, amount)
@@ -356,27 +373,32 @@ class Broker:
             del self.open_orders[symbol][order.id]
 
     def next(self):
-        if self._i != 0: # Check Liquidation
+        data = self.data
+        i = self._i
+        if i != 0: # Check Liquidation
+            prev = i - 1
             for s in self._held:          # a liquidation rebuilds _held; this loop keeps the old list
                 p = self.position[s]
-                _, prev_high, prev_low, _ = self._bars(s, self._i - 1)
                 lp = p.liquid_price
-                # Check Liquidation Condition
-                if ((p.qty > 0 and prev_low <= lp) or 
-                    (p.qty < 0 and prev_high >= lp)):
+                # Check Liquidation Condition (held positions are never flat)
+                if (data[s].low[prev] <= lp) if p.qty > 0 else (data[s].high[prev] >= lp):
                     # Create MARKET Order for liquidation & Execute
                     order = self.order(p.symbol,  -p.qty, lp, type="MARKET")
                     self._execute_trade(p.symbol, order, lp, True)
 
         # Funding is settled at the open, before this bar's orders fill.
         if self.funding:
-            self._apply_funding()
+            if self._funding_bars is None:
+                self._funding_bars = self._find_funding_bars()
+            if self._funding_bars[i]:
+                self._apply_funding()
 
         # Execute open orders (iterate snapshots to avoid mutation issues)
         for symbol, by_id in list(self.open_orders.items()):
             if not by_id:
                 continue
-            open, high, low, _ = self._bars(symbol, self._i)
+            d = data[symbol]
+            open, high, low = d.open[i], d.high[i], d.low[i]
 
             for _, order in list(by_id.items()):
                 # Set market order price and update

@@ -196,13 +196,14 @@ class Recorder:
             self._held_order = sorted((s for s in broker._held if s in self._rank),
                                       key=self._rank.__getitem__)
         margin = gross = net = unrealized_total = 0.0
+        positions, data, open_trips = broker.position, broker.data, self._open
         for symbol in self._held_order:
             fields = self._positions[symbol]
-            position = broker.position[symbol]
+            position = positions[symbol]
             close = fields["close"][i]
             qty = float(position.qty)
             exposure = qty * close
-            unrealized = position.unrealized_pnl(close)
+            unrealized = (close - position.price) * qty   # Position.unrealized_pnl; never flat here
             fields["qty"][i] = qty
             fields["entry_price"][i] = position.price
             fields["exposure"][i] = exposure
@@ -215,9 +216,12 @@ class Recorder:
             net += exposure
             unrealized_total += unrealized
 
-            trip = self._open.get(symbol)
+            trip = open_trips.get(symbol)
             if trip is not None:
-                self._stretch(trip, float(broker._high(symbol, i)), float(broker._low(symbol, i)))
+                d = data[symbol]
+                high, low = float(d.high[i]), float(d.low[i])
+                trip["high"] = max(trip["high"], high, low)
+                trip["low"] = min(trip["low"], high, low)
 
         equity = broker.cash + unrealized_total
         account = self._account
