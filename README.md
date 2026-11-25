@@ -2,16 +2,32 @@
 
 [![Tests](https://github.com/dohyunkjuly/overfitting/actions/workflows/tests.yml/badge.svg)](https://github.com/dohyunkjuly/overfitting/actions/workflows/tests.yml)
 
-Overfitting simulates a realistic crypto futures trading environment including 
-- **Liquidation**, **Margin**, **Leverage** for stress testing
-- **Multiple Currency** Trading (e.g., backtesting BTC PERP & ETH PERP at the same time)
-- Four Different Order Types: LIMIT, MARKET, STOP_LIMIT, STOP_MARKET
-- Slippage/Commission Setting
+For backtesting crypto perpetual futures strategies.
+
+- **Liquidation, margin and leverage**, using isolated margin
+- **Several symbols in one backtest**, e.g. BTC and ETH perpetuals together
+- **Four order types**: limit, market, stop-limit and stop-market
+- **Commission, slippage and funding rates**
+- **Market data from 19 exchanges**, downloaded once and kept on your machine
+- **A parameter optimizer** that runs in parallel
+- **A full performance report**: a printed summary and 13 charts
 
 ## Installation
+
     $ pip install overfitting
 
-## Usage
+## Contents
+
+- [Quick Start](#quick-start)
+- [Market Data](#market-data)
+- [Writing a Strategy](#writing-a-strategy)
+- [How the Simulation Works](#how-the-simulation-works)
+- [Report and Charts](#report-and-charts)
+- [Trade and Account Data](#trade-and-account-data)
+- [Parameter Optimization](#parameter-optimization)
+
+## Quick Start
+
 Run from the repository root; the example reads the sample data in `examples/data/`.
 
 ```python
@@ -21,14 +37,16 @@ from overfitting.indicators import sma, crossover, crossunder
 
 def load_data():
     df = pd.read_csv('examples/data/BTCUSDT.csv')
-    benchamrk_df = pd.read_csv('examples/data/BTCUSDT.csv') # BTC buy and Hold
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('timestamp', inplace=True)
+    df = df.set_index('timestamp')
 
-    start_time = pd.to_datetime('2023-01-01 00:00:00')
-    df = df.loc[start_time:]
+    # Funding rates are paid every 8 hours; every other bar gets 0
+    funding = pd.read_csv('examples/data/BTCUSDT_funding.csv')
+    funding['timestamp'] = pd.to_datetime(funding['timestamp'], unit='ms')
+    df['funding_rate'] = funding.set_index('timestamp')['funding_rate'].reindex(df.index, fill_value=0)
 
-    return df, benchamrk_df
+    benchmark_df = pd.read_csv('examples/data/BTCUSDT.csv')  # BTC buy and hold
+    return df, benchmark_df
 
 class MyStrategy(Strategy):
     def init(self):
@@ -55,18 +73,36 @@ class MyStrategy(Strategy):
 price_df, benchmark_data = load_data()
 strategy = MyStrategy(
     data={"BTC": price_df},
-    benchmark=benchmark_data, # Default = None Optional
-    initial_capital=100_000, # Default Optional
-    commission_rate=0.0002, # Default Optional
-    maint_margin_rate=0.005, # Default Optional
-    maint_amount=50  # Default Optional
+    benchmark=benchmark_data,
+    initial_capital=100_000,
+    commission_rate=0.0002,
+    maint_margin_rate=0.005,
+    maint_amount=50,
+    funding=True,
 )
 returns = strategy.run()
 strategy.plot(returns)
 ```
 
-Results
--------
+A strategy is a class with two methods: `init()` runs once before the first bar, and `next()` runs on every bar. `MyStrategy(...)` takes:
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `data` | required | `{name: DataFrame}` with `open`, `high`, `low`, `close` and `volume` columns, and a `timestamp` column or a datetime index. `load()` returns this format |
+| `benchmark` | `None` | Price data (a `close` column) to compare against in the report, e.g. buy and hold |
+| `initial_capital` | `100000` | Starting cash, in the quote currency of the data (USDT for BTC/USDT). Every money value in the results is in this currency |
+| `commission_rate` | `0.0002` | Fee on each fill, as a share of its value (0.02%) |
+| `maint_margin_rate` | `0.005` | Maintenance margin rate, used for the liquidation price |
+| `maint_amount` | `0` | Maintenance amount subtracted from the maintenance margin, as exchanges list it per tier |
+| `slippage` | `None` | A number like `0.001` (each fill 0.1% worse) or a slippage model; see [Slippage](#slippage) |
+| `params` | `None` | Values for the strategy's parameters, e.g. `{"fast": 10}`; see [Parameter Optimization](#parameter-optimization) |
+| `record` | `True` | `False` skips the per-bar history for a faster run; returns are the same |
+| `funding` | `False` | `True` settles funding from the `funding_rate` column; see [Funding Rate](#funding-rate) |
+
+`strategy.run()` returns the returns per bar, and `strategy.plot(returns)` prints the summary below and shows the 13 charts after it.
+
+### Results
+
 ```text
 Performance Summary
 
@@ -75,85 +111,85 @@ Overview
   End Date                                     2024-08-29 00:00
   Number of Years                                         1.663
   Initial Balance                                    100,000.00
-  Final Balance                                      205,328.91
-  Total Return                                          105.33%
-  CAGR                                                   54.13%
+  Final Balance                                      194,771.96
+  Total Return                                           94.77%
+  CAGR                                                   49.31%
 
 Returns
-  Best Day                                               10.08%
-  Worst Day                                              -5.38%
-  Best Month                                             27.88%
-  Worst Month                                           -13.71%
-  Positive Days                                          34.93%
-  Positive Months                                        70.00%
-  Average Up Day                                          1.59%
-  Average Down Day                                       -0.95%
+  Best Day                                                9.51%
+  Worst Day                                              -5.94%
+  Best Month                                             27.29%
+  Worst Month                                           -15.41%
+  Positive Days                                          34.76%
+  Positive Months                                        65.00%
+  Average Up Day                                          1.58%
+  Average Down Day                                       -0.96%
   Longest Winning Streak (days)                               7
   Longest Losing Streak (days)                                7
 
 Risk
-  Volatility (annualized)                                33.08%
-  Downside Deviation (annualized)                        17.38%
-  Sharpe Ratio                                            1.470
-  Sortino Ratio                                           2.799
-  Calmar Ratio                                            2.040
-  Omega Ratio                                             1.316
-  Gain to Pain Ratio                                      0.316
-  Tail Ratio                                              1.569
-  Common Sense Ratio                                      2.064
-  Daily Value at Risk (95%)                              -2.19%
-  Daily Expected Shortfall (95%)                         -3.16%
-  Skew (daily)                                            1.804
-  Excess Kurtosis (daily)                                 7.538
+  Volatility (annualized)                                33.29%
+  Downside Deviation (annualized)                        17.81%
+  Sharpe Ratio                                            1.368
+  Sortino Ratio                                           2.557
+  Calmar Ratio                                            1.915
+  Omega Ratio                                             1.293
+  Gain to Pain Ratio                                      0.293
+  Tail Ratio                                              1.432
+  Common Sense Ratio                                      1.851
+  Daily Value at Risk (95%)                              -2.21%
+  Daily Expected Shortfall (95%)                         -3.30%
+  Skew (daily)                                            1.696
+  Excess Kurtosis (daily)                                 7.157
 
 Drawdown
-  Max Drawdown                                          -26.53%
-  Current Drawdown                                      -20.56%
-  Average Drawdown                                       -4.91%
-  Longest Drawdown (days)                                   219
-  Time Underwater                                        93.41%
-  Ulcer Index                                            12.12%
-  Recovery Factor                                         3.970
+  Max Drawdown                                          -25.75%
+  Current Drawdown                                      -18.80%
+  Average Drawdown                                       -5.09%
+  Longest Drawdown (days)                                   221
+  Time Underwater                                        93.74%
+  Ulcer Index                                            12.64%
+  Recovery Factor                                         3.680
 
 Sharpe Ratio Reliability
-  Sharpe 95% Range                                 0.05 to 2.89
-  Probability Sharpe Above 0                             97.86%
+  Sharpe 95% Range                                -0.07 to 2.80
+  Probability Sharpe Above 0                             96.91%
 
 Benchmark
-  Alpha (annualized)                                      3.44%
-  Beta                                                    0.509
+  Alpha (annualized)                                      0.00%
+  Beta                                                    0.513
   Correlation                                             0.758
-  Tracking Error (annualized)                            32.39%
-  Information Ratio                                      -1.238
-  Excess Return (annualized)                            -61.21%
-  Up Capture                                              0.493
-  Down Capture                                            0.479
+  Tracking Error (annualized)                            32.32%
+  Information Ratio                                      -1.337
+  Excess Return (annualized)                            -66.03%
+  Up Capture                                              0.491
+  Down Capture                                            0.487
 
 Trades
   Total Trades                                              182
   Long Trades                                               182
   Short Trades                                                0
-  Win Rate                                               37.36%
-  Win Rate (long)                                        37.36%
+  Win Rate                                               36.26%
+  Win Rate (long)                                        36.26%
   Win Rate (short)                                          n/a
-  Average Win                                          5,837.17
-  Average Loss                                        -2,557.89
-  Largest Win                                         27,402.74
-  Largest Loss                                       -10,211.93
-  Payoff Ratio                                            2.282
-  Profit Factor                                           1.361
-  Expectancy per Trade                                   578.73
+  Average Win                                          5,616.32
+  Average Loss                                        -2,378.49
+  Largest Win                                         26,267.52
+  Largest Loss                                       -10,531.00
+  Payoff Ratio                                            2.361
+  Profit Factor                                           1.343
+  Expectancy per Trade                                   520.73
   Average Holding Time (bars)                            43.352
-  Average Holding Time, Winners (bars)                   73.294
-  Average Holding Time, Losers (bars)                    25.491
-  Longest Winning Streak (trades)                             7
-  Longest Losing Streak (trades)                              8
+  Average Holding Time, Winners (bars)                   74.076
+  Average Holding Time, Losers (bars)                    25.871
+  Longest Winning Streak (trades)                             4
+  Longest Losing Streak (trades)                             10
   Trades per Month                                        9.233
-  Profit From Best Trade                                 26.02%
-  Net Profit Without Best 5 Trades                   -20,822.32
-  Gross Profit                                       396,927.83
-  Gross Loss                                        -291,598.92
-  Net Profit                                         105,328.91
+  Profit From Best Trade                                 27.72%
+  Net Profit Without Best 5 Trades                   -24,052.18
+  Gross Profit                                       370,677.31
+  Gross Loss                                        -275,905.34
+  Net Profit                                          94,771.96
 
 Trade Quality
   Average Adverse Excursion                              -1.85%
@@ -161,23 +197,23 @@ Trade Quality
   Liquidations                                                0
 
 Costs
-  Total Commission                                    11,407.29
+  Total Commission                                    10,689.43
   Total Slippage                                           0.00
-  Funding Paid                                             0.00
-  Funding Received                                         0.00
-  Total Costs                                         11,407.29
-  Profit Before Costs                                116,736.20
-  Costs as Share of Profit Before Costs                   9.77%
-  Traded Value                                    57,036,444.00
-  Turnover (times equity per year)                      196.244
+  Funding Paid                                        16,533.80
+  Funding Received                                       360.10
+  Total Costs                                         26,863.14
+  Profit Before Costs                                121,635.10
+  Costs as Share of Profit Before Costs                  22.09%
+  Traded Value                                    53,447,149.50
+  Turnover (times equity per year)                      193.623
 
 Exposure and Margin
   Time in Market                                         54.25%
-  Average Leverage                                        0.491
-  Average Leverage in Market                              0.906
-  Maximum Leverage                                        0.991
-  Average Margin Usage                                   48.02%
-  Peak Margin Usage                                     102.54%
+  Average Leverage                                        0.487
+  Average Leverage in Market                              0.898
+  Maximum Leverage                                        1.001
+  Average Margin Usage                                   47.59%
+  Peak Margin Usage                                     101.06%
   Closest Distance to Liquidation                        99.50%
 
 Orders
@@ -190,23 +226,37 @@ Orders
   Average Slippage per Fill                               0.00%
 
 By Symbol
-       Trades Win rate     Net PnL Average PnL Profit factor Share of profit Time held
-Symbol                                                                                
-BTC       182    37.4%  105,328.91      578.73          1.36          100.0%     54.2%
+       Trades Win rate    Net PnL Average PnL Profit factor Share of profit Time held
+Symbol
+BTC       182    36.3%  94,771.96      520.73          1.34          100.0%     54.2%
 
 Worst Drawdowns
    Net drawdown in %  Peak date Valley date Recovery date  Duration (days)
-0          26.533797 2024-03-13  2024-06-28           NaT              169
-1          20.996185 2023-03-17  2023-09-12    2023-10-23              219
-2           7.051091 2023-12-05  2024-01-22    2024-02-09               65
-3           5.980692 2023-01-21  2023-02-13    2023-02-15               24
-4           5.578214 2023-02-15  2023-03-07    2023-03-12               24
-5           5.550106 2024-03-04  2024-03-06    2024-03-11                6
-6           4.538401 2023-11-10  2023-11-16    2023-12-04               23
-7           2.530832 2023-11-01  2023-11-03    2023-11-09                7
-8           2.162228 2024-02-18  2024-02-23    2024-02-27                8
-9           1.603446 2024-02-28  2024-02-29    2024-03-04                4
+0          25.753683 2024-03-13  2024-07-08           NaT              169
+1          21.944019 2023-03-17  2023-09-12    2023-10-25              221
+2           8.777934 2023-12-05  2024-01-22    2024-02-09               65
+3           6.286733 2023-01-21  2023-02-13    2023-02-15               24
+4           6.144841 2024-03-04  2024-03-06    2024-03-11                6
+5           5.828858 2023-02-15  2023-03-07    2023-03-12               24
+6           4.959508 2023-11-10  2023-11-16    2023-12-04               23
+7           2.192422 2023-11-01  2023-11-03    2023-11-09                7
+8           1.879171 2024-02-28  2024-02-29    2024-03-04                4
+9           1.823384 2024-02-18  2024-02-23    2024-02-27                8
 ```
+
+![Cumulative returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns.png)
+![Cumulative returns, log scale](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns_log.png)
+![Monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_heatmap.png)
+![Yearly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/yearly_returns.png)
+![Distribution of monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_distribution.png)
+![Return quantiles](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/return_quantiles.png)
+![Rolling Sharpe ratio](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_sharpe.png)
+![Rolling volatility](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_volatility.png)
+![Drawdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/drawdown.png)
+![Rolling beta](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_beta.png)
+![Profit per trade](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/profit_per_trade.png)
+![Cost breakdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cost_breakdown.png)
+![Distance to liquidation](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/liquidation_distance.png)
 
 ## Market Data
 
@@ -275,7 +325,9 @@ Where an exchange has no funding history, `funding_rate` is 0 and `load()` warns
 - A catalog (`catalog.sqlite` in the same folder) records what has been downloaded and logs every change. `overfitting.market.stored()` lists what is saved; `overfitting.market.downloads()` shows the log.
 - Files deleted by hand are downloaded again on the next `load()`. Parquet files you put in the folder yourself (named like the others, with columns `time`, `open`, `high`, `low`, `close`, `volume`) are checked and used instead of downloading. A file that fails the checks is renamed to `*.invalid` with a warning.
 
-## Indicators
+## Writing a Strategy
+
+### Indicators
 
 An indicator is a plain function that takes price series and returns one value per bar. Declare it in `init()` with `self.I`, then read it in `next()` relative to the current bar:
 
@@ -303,7 +355,79 @@ def next(self):
 
 `next(self, i)` with the bar index is also supported.
 
-## Slippage
+### Placing Orders
+
+```python
+self.limit_order(symbol, qty, price)
+self.market_order(symbol, qty)
+self.stop_limit_order(symbol, qty, price, stop_price)
+self.stop_market_order(symbol, qty, stop_price)
+```
+
+`qty` is positive to buy and negative to sell. Each returns the order, and each takes an optional `label` that shows up in the trade log.
+
+- A market order fills at the open of the current bar.
+- A limit order fills when the price trades through its limit. One placed when the open is already better than the limit fills at the open.
+- A stop order triggers when the high reaches the stop price (buys) or the low reaches it (sells).
+- A triggered stop-market order fills at the stop price, or at the open if the bar opened past it.
+- A triggered stop-limit order becomes a limit order at that price. If the limit leaves room (a buy limit at or above it, a sell limit at or below it), it fills there at once; otherwise it waits for the price to trade through the limit.
+- A stop order that would trigger the moment it is placed, because the price is already past its stop, is rejected with `StopOrderRejected`.
+
+### Account and Position
+
+| Method | Returns or does |
+|---|---|
+| `get_position(symbol)` | The position: `qty`, entry `price`, `margin`, `liquid_price`, `leverage` |
+| `get_balance()` | Cash, without unrealized PnL |
+| `get_equity()` | Cash plus the unrealized PnL of open positions |
+| `get_available_margin()` | Cash not locked as margin |
+| `get_open_orders(symbol)` | Open orders, as `{order id: order}` |
+| `set_leverage(symbol, leverage)` | Leverage from 1 to 100 |
+| `cancel_order(symbol, order_id)`, `cancel_all_orders(symbol)` | Cancel open orders |
+| `close_all_positions(symbol)` | Close the position with a market order |
+| `price(symbol)` | The open of the current bar, the price a market order placed now fills at |
+
+### Multiple Symbols
+
+Pass one DataFrame per symbol: `MyStrategy({"BTC": btc_df, "ETH": eth_df})`. They must cover the same timestamps; `load()` lines them up for you. See `examples/multi_currency_sma_cross.ipynb`.
+
+## How the Simulation Works
+
+### Margin Check
+
+An order that opens or increases a position needs `price × quantity / leverage` of free margin, where free margin is the cash balance minus the margin locked in open positions.
+
+- If the account cannot afford the order when it is placed, `InsufficientMargin` is raised.
+- If the account can no longer afford a resting order when it fills, the order is dropped and listed in `strategy.fetch_rejected_orders()`.
+- Orders that reduce or close a position are always accepted.
+
+### Liquidation
+
+The liquidation logic is based on **isolated margin mode**:
+
+- **Initial Margin** = Entry Price × Quantity / Leverage
+- **Maintenance Margin** = Entry Price × Quantity × Maintenance Margin Rate − Maintenance Amount
+- **Liquidation Price** is then calculated based on whether the position is long or short.
+    - Long Position Liquidation Price => Entry Price - (Initial Margin - Maintenance Margin)
+    - Short Position Liquidation Price => Entry Price + (Initial Margin - Maintenance Margin)
+
+When the price crosses the calculated liquidation level, the position is force-closed and the **entire initial margin is lost**. Nothing more is charged on top, so an isolated position can never lose more than the margin posted for it. Liquidations are marked in the trade log with `is_liquidation_order = True`.
+
+### Funding Rate
+
+Funding is off by default. To simulate it, give a symbol's DataFrame a `funding_rate` column (`load(..., funding=True)` adds one) and pass `funding=True` to the strategy:
+
+```python
+strategy = MyStrategy(data, funding=True)
+```
+
+A non-zero value on a bar means funding is settled at that bar's open, on the position held into it:
+
+    payment = -position quantity × open price × funding rate
+
+Longs pay and shorts receive when the rate is positive. Bars with `0` or `NaN` settle nothing. Payments change the cash balance and are listed in `strategy.fetch_funding()`.
+
+### Slippage
 
 ```python
 MyStrategy(data, slippage=0.001)             # every fill is 0.1% worse than the order price
@@ -315,6 +439,169 @@ MyStrategy(data, slippage=lambda order, bar: order.theoretical_price + 0.5)   # 
 ```
 
 A slippage model is a function `(order, bar) -> executed price`. `order.qty` is positive for a buy, and `bar` has `open`, `high`, `low` and `close`.
+
+### Equity Curve
+
+`strategy.run()` returns are based on **equity**: cash plus the unrealized PnL of open positions, marked at each bar's close. Drawdown and Sharpe therefore include losses on positions that are still open.
+
+```python
+returns = strategy.run()                       # mark-to-market (default)
+returns = strategy.run(mark_to_market=False)   # realized only: moves when trades close
+
+strategy.equity_curve        # cash + unrealized PnL per bar
+strategy.realized_balances   # cash per bar
+```
+
+## Report and Charts
+
+`strategy.plot(returns)` prints a performance summary and shows 13 charts. The [Quick Start](#results) shows the full output.
+
+The summary has eleven sections: overview, returns, risk, drawdown, Sharpe ratio reliability, benchmark, trades, trade quality, costs, exposure and margin, and orders, followed by a per-symbol table and the worst drawdowns.
+
+```python
+strategy.plot(returns)                         # print the summary and show the charts
+strategy.plot(returns, save_path="results")    # also save each chart as a PNG in results/
+strategy.plot(returns, title="SMA cross")      # name used on the charts
+```
+
+| Chart | Function in `overfitting.analysis.plots` | Needs |
+|---|---|---|
+| Cumulative returns | `cumulative_returns` | |
+| Cumulative returns, log scale | `cumulative_returns_log` | |
+| Monthly returns heatmap | `monthly_heatmap` | |
+| Yearly returns | `yearly_returns` | |
+| Distribution of monthly returns | `monthly_distribution` | |
+| Return quantiles (box plot of daily, weekly, monthly returns) | `return_quantiles` | |
+| Rolling Sharpe | `rolling_sharpe` | |
+| Rolling volatility | `rolling_volatility` | |
+| Drawdown | `drawdown` | |
+| Rolling beta | `rolling_beta` | a benchmark |
+| Profit per trade | `profit_per_trade` | |
+| Cost breakdown | `cost_breakdown` | |
+| Distance to liquidation | `liquidation_distance` | |
+
+Rolling beta is skipped when no benchmark is given. Each chart is also available on its own, and every number behind them is in `overfitting.analysis.metrics`:
+
+```python
+from overfitting.analysis import metrics, plots
+
+daily = metrics.aggregate_returns(returns, "D")
+plots.drawdown(daily).savefig("drawdown.png")
+plots.profit_per_trade(strategy.fetch_round_trips())
+metrics.summary(daily)       # 49 metrics as a pandas Series
+
+metrics.trade_summary(strategy.fetch_round_trips())   # win rate, expectancy, streaks ...
+metrics.by_symbol(strategy.fetch_round_trips())       # results per symbol
+metrics.by_weekday(strategy.fetch_round_trips())      # results by entry weekday
+```
+
+## Trade and Account Data
+
+After `strategy.run()`, everything that happened is available as pandas DataFrames:
+
+```python
+strategy.fetch_round_trips()            # one row per completed trade
+strategy.fetch_trades()                 # one row per fill
+strategy.fetch_orders()                 # every order placed, with its status
+strategy.fetch_account_history()        # the account on every bar
+strategy.fetch_position_history("BTC")  # one symbol's position on every bar
+strategy.fetch_funding()                # funding payments
+```
+
+The examples below are from the [Quick Start](#quick-start). Wide tables show their main columns; every column is listed under each one.
+
+### Round trips
+
+A round trip runs from opening a position until it is flat again or flips sides.
+
+```text
+  symbol  side          entry_time           exit_time  qty  entry_price  exit_price     net_pnl  return_pct     mae     mfe
+0    BTC  LONG 2023-01-04 07:00:00 2023-01-06 02:00:00  5.0      16872.8     16818.1   -333.3073     -0.0040 -0.0078  0.0066
+1    BTC  LONG 2023-01-07 01:00:00 2023-01-18 19:00:00  5.0      16969.9     20933.3  19467.0870      0.2294 -0.0041  0.2771
+2    BTC  LONG 2023-01-20 08:00:00 2023-01-22 23:00:00  5.0      20954.1     22674.1   8477.4236      0.0809 -0.0028  0.1162
+```
+
+Columns: `symbol`, `side`, `entry_time`, `exit_time`, `bars_held`, `duration`, `qty`, `entry_price`, `exit_price`, `pnl`, `commission`, `funding`, `net_pnl`, `return_pct`, `mae`, `mfe`, `fills`, `entry_label`, `exit_label`, `is_liquidation`.
+
+- `pnl` is before costs; `net_pnl` is after commission and funding.
+- `return_pct` is `net_pnl` as a share of the entry value.
+- `mae` and `mfe` are how far the price moved against and in favour of the position while it was open, as a share of the entry price.
+
+A round trip runs from flat to flat, however many fills happen in between. Buying 0.5 BTC, selling 0.25, buying 0.5 and selling 0.75 is one round trip with 4 fills:
+
+- `entry_price` is the average of all buys and `exit_price` the average of all sells, weighted by size.
+- `pnl` is the sum of every partial close.
+- `qty` is the largest position held, 0.75 here.
+
+`fetch_trades()` still lists each fill separately.
+
+### Fills
+
+```text
+          executed_at symbol   side    type  qty  executed_price  commission  realized_pnl
+0 2023-01-04 07:00:00    BTC   LONG   LIMIT  5.0         16872.8     16.8728      -16.8728
+1 2023-01-06 02:00:00    BTC  SHORT  MARKET -5.0         16818.1     16.8181     -290.3181
+2 2023-01-07 01:00:00    BTC   LONG   LIMIT  5.0         16969.9     16.9699      -16.9699
+```
+
+### Orders
+
+```text
+           created_at symbol    type  qty    price stop_price  status reject_reason
+0 2023-01-04 07:00:00    BTC   LIMIT  5.0  16872.8       None  FILLED          None
+1 2023-01-06 02:00:00    BTC  MARKET -5.0      NaN       None  FILLED          None
+2 2023-01-07 01:00:00    BTC   LIMIT  5.0  16969.9       None  FILLED          None
+```
+
+Fills and orders have the same columns: `id`, `created_at`, `executed_at`, `cancelled_at`, `status`, `reject_reason`, `symbol`, `qty`, `side`, `price`, `type`, `stop_price`, `is_triggered`, `is_liquidation_order`, `theoretical_price`, `executed_price`, `slippage`, `commission`, `pnl`, `realized_pnl`, `label`.
+
+- `status` is `OPEN`, `FILLED`, `CANCELLED` or `REJECTED`, with the reason in `reject_reason`.
+- `theoretical_price` is the price before slippage, `executed_price` after it, and `slippage` what that cost.
+- `pnl` is the profit the fill closed; `realized_pnl` is `pnl` minus commission.
+- Orders the account could no longer afford when they filled are also listed in `strategy.fetch_rejected_orders()`.
+
+### Account history
+
+One row per bar, at the bar's close. Here a position opens at 07:00:
+
+```text
+                          cash     equity   margin  gross_exposure  net_exposure  leverage
+2023-01-04 06:00:00  100000.00  100000.00      0.0             0.0           0.0      0.00
+2023-01-04 07:00:00   99983.13   99931.63  84364.0         84312.5       84312.5      0.84
+2023-01-04 08:00:00   99980.27   99901.77  84364.0         84285.5       84285.5      0.84
+```
+
+- `equity` is cash plus unrealized PnL; `margin` is the margin locked in open positions.
+- `gross_exposure` adds longs and shorts; `net_exposure` is longs minus shorts.
+- `leverage` is gross exposure over equity.
+
+### Position history
+
+One row per bar for one symbol, at the bar's close:
+
+```text
+                     qty  entry_price    close  exposure   margin  liquidation_price  unrealized_pnl
+2023-01-04 06:00:00  0.0          NaN  16872.9       0.0      0.0                NaN             0.0
+2023-01-04 07:00:00  5.0      16872.8  16862.5   84312.5  84364.0              74.36           -51.5
+2023-01-04 08:00:00  5.0      16872.8  16857.1   84285.5  84364.0              74.36           -78.5
+```
+
+While flat, `qty` is 0 and the entry and liquidation prices are `NaN`.
+
+### Funding
+
+The first two payments, and the first one received:
+
+```text
+                  time symbol  qty    price  funding_rate    amount
+0  2023-01-04 08:00:00    BTC  5.0  16862.5      0.000034 -2.856508
+1  2023-01-04 16:00:00    BTC  5.0  16846.5      0.000049 -4.153505
+12 2023-01-09 08:00:00    BTC  5.0  17189.8     -0.000007  0.572420
+```
+
+- Each row is one payment. `price` is the open of the bar it was paid on.
+- `amount` is `-qty × price × funding_rate`. A long pays when the rate is positive and gets paid when it is negative.
+- Over the whole backtest, this strategy made 991 payments: it paid 16,533.80 and received 360.10.
 
 ## Parameter Optimization
 
@@ -392,158 +679,3 @@ result.strategy.plot(result.returns)
 Combinations run in parallel on macOS and Linux. On the example above, 1,000 combinations of 14,500 hourly bars take about 6 seconds on a 10-core laptop.
 
 For a full walkthrough (grid and random search, a custom objective, the heatmap, and the winner's report), see `examples/optimize_sma_cross.ipynb`.
-
-## Report and Charts
-
-The summary has eleven sections: overview, returns, risk, drawdown, Sharpe ratio reliability, benchmark, trades, trade quality, costs, exposure and margin, and orders, followed by a per-symbol table and the worst drawdowns.
-
-`strategy.plot(returns)` prints the summary above and shows 13 charts, one after another.
-
-- In a Jupyter or VS Code notebook the charts appear inline.
-- In a script each opens in a matplotlib window.
-
-```python
-strategy.plot(returns)                         # print the summary and show the charts
-strategy.plot(returns, save_path="results")    # also save each chart as a PNG in results/
-strategy.plot(returns, title="SMA cross")      # name used on the charts
-```
-
-| Chart | Function in `overfitting.analysis.plots` | Needs |
-|---|---|---|
-| Cumulative returns | `cumulative_returns` | |
-| Cumulative returns, log scale | `cumulative_returns_log` | |
-| Monthly returns heatmap | `monthly_heatmap` | |
-| Yearly returns | `yearly_returns` | |
-| Distribution of monthly returns | `monthly_distribution` | |
-| Return quantiles (box plot of daily, weekly, monthly returns) | `return_quantiles` | |
-| Rolling Sharpe | `rolling_sharpe` | |
-| Rolling volatility | `rolling_volatility` | |
-| Drawdown | `drawdown` | |
-| Rolling beta | `rolling_beta` | a benchmark |
-| Profit per trade | `profit_per_trade` | |
-| Cost breakdown | `cost_breakdown` | |
-| Distance to liquidation | `liquidation_distance` | |
-
-Rolling beta is skipped when no benchmark is given. Each chart is also available on its own, and every number behind them is in `overfitting.analysis.metrics`:
-
-```python
-from overfitting.analysis import metrics, plots
-
-daily = metrics.aggregate_returns(returns, "D")
-plots.drawdown(daily).savefig("drawdown.png")
-plots.profit_per_trade(strategy.fetch_round_trips())
-metrics.summary(daily)       # 49 metrics as a pandas Series
-
-metrics.trade_summary(strategy.fetch_round_trips())   # win rate, expectancy, streaks ...
-metrics.by_symbol(strategy.fetch_round_trips())       # results per symbol
-metrics.by_weekday(strategy.fetch_round_trips())      # results by entry weekday
-```
-
-The 13 charts, from the example above:
-
-![Cumulative returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns.png)
-![Cumulative returns, log scale](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cumulative_returns_log.png)
-![Monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_heatmap.png)
-![Yearly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/yearly_returns.png)
-![Distribution of monthly returns](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/monthly_distribution.png)
-![Return quantiles](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/return_quantiles.png)
-![Rolling Sharpe ratio](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_sharpe.png)
-![Rolling volatility](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_volatility.png)
-![Drawdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/drawdown.png)
-![Rolling beta](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/rolling_beta.png)
-![Profit per trade](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/profit_per_trade.png)
-![Cost breakdown](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/cost_breakdown.png)
-![Distance to liquidation](https://raw.githubusercontent.com/dohyunkjuly/overfitting/main/documents/liquidation_distance.png)
-
-## Trade and Account Data
-
-After `strategy.run()`, everything that happened is available as pandas DataFrames:
-
-```python
-strategy.fetch_round_trips()            # one row per completed trade
-strategy.fetch_trades()                 # one row per fill
-strategy.fetch_orders()                 # every order placed, with its status
-strategy.fetch_account_history()        # the account on every bar
-strategy.fetch_position_history("BTC")  # one symbol's position on every bar
-strategy.fetch_funding()                # funding payments
-```
-
-- **Round trips** run from opening a position until it is flat again or flips sides. Each row has entry and exit time and price, holding time, gross PnL, commission, funding, net PnL, and `mae` / `mfe`: how far the price moved against and in favour of the position while it was open, as a fraction of the entry price.
-- **Orders** carry a `status` of `OPEN`, `FILLED`, `CANCELLED` or `REJECTED`, a `reject_reason` when rejected, and the `slippage` cost of each fill.
-- **Account history** has cash, equity, margin in use, gross and net exposure, and leverage.
-- **Position history** has size, entry price, close, exposure, margin, liquidation price and unrealized PnL.
-
-## Liquidation Handling
-
-The liquidation logic is based on **isolated margin mode**:
-
-- **Initial Margin** = Entry Price × Quantity / Leverage  
-- **Maintenance Margin** = Entry Price × Quantity × Maintenance Margin Rate − Maintenance Amount  
-- **Liquidation Price** is then calculated based on whether the position is long or short.
-    - Long Position Liquidation Price => Entry Price - (Initial Margin - Maintenance Margin)
-    - Short Position Liquidation Price => Entry Price + (Initial Margin - Maintenance Margin)
-
-When the price crosses the calculated liquidation level, the position is force-closed and the **entire initial margin is lost**. Nothing more is charged on top, so an isolated position can never lose more than the margin posted for it. Liquidations are marked in the trade log with `is_liquidation_order = True`.
-
-## Margin Check
-
-An order that opens or increases a position needs `price × quantity / leverage` of free margin, where free margin is the cash balance minus the margin locked in open positions.
-
-- If the account cannot afford the order when it is placed, `InsufficientMargin` is raised.
-- If the account can no longer afford a resting order when it fills, the order is dropped and listed in `strategy.fetch_rejected_orders()`.
-- Orders that reduce or close a position are always accepted.
-
-## Equity Curve
-
-`strategy.run()` returns are based on **equity**: cash plus the unrealized PnL of open positions, marked at each bar's close. Drawdown and Sharpe therefore include losses on positions that are still open.
-
-```python
-returns = strategy.run()                       # mark-to-market (default)
-returns = strategy.run(mark_to_market=False)   # realized only: moves when trades close
-
-strategy.equity_curve        # cash + unrealized PnL per bar
-strategy.realized_balances   # cash per bar
-```
-
-## Funding Rate
-
-Funding is off by default. To simulate it, give a symbol's DataFrame a `funding_rate` column (`load(..., funding=True)` adds one) and pass `funding=True` to the strategy:
-
-```python
-strategy = MyStrategy(data, funding=True)
-```
-
-A non-zero value on a bar means funding is settled at that bar's open, on the position held into it:
-
-    payment = -position quantity × open price × funding rate
-
-Longs pay and shorts receive when the rate is positive. Bars with `0` or `NaN` settle nothing. Payments change the cash balance and are listed in `strategy.fetch_funding()`.
-
-## Supported Order Types
-Supports four order types: LIMIT, MARKET, STOP LIMIT, and STOP MARKET. Each behaves according to standard trading conventions.
-
-[NOTE] Rules
-- For MAKRET Orders, the system will automatically execute the trade with "open" price.
-- For STOP Orders, the system will automatically trigger the order when:
-    - Long: Price (High) >= Stop Price
-    - Short: Price (Low) <= Stop Price
-- A triggered STOP MARKET order fills at the stop price, or at the open if the bar opened past it.
-- A triggered STOP LIMIT order becomes a limit order at that price. If the limit leaves room (a buy limit at or above it, a sell limit at or below it), it fills there at once; otherwise it waits for the price to trade through the limit.
-- **Stop Order Immediate Rejection Rule**: If a STOP LIMIT or STOP MARKET order would trigger immediately upon creation (because the current price already breaches the stop price), the system rejects the order with "STOP order would Immediately Trigger" message.
- 
-```python
-limit_order(symbol: str, qty: float, price: float)
-market_order(symbol: str, qty: float)
-stop_limit_order(symbol: str, qty: float, price: float, stop_price: float)
-stop_market_order(symbol: str, qty: float, stop_price: float)
-```
-
-## Multiple Currency Backtesting
-You can simply test multiple currencies by passing data as dict[str, pd.DataFrame]. For examples, please refer to "multi_currency_sma_corss.ipynb" under "examples" folder.
-
-## Upcoming Features
-
-- **Overfitting checks**  
-  Deflated Sharpe ratio, walk-forward testing and a random-entry baseline, to tell whether a backtest result is likely to hold up.
-
-> 💡 Got feedback or suggestions? Feel free to open an issue or contribute via pull request.
