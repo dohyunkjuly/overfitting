@@ -17,7 +17,7 @@ report, in order.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -278,7 +278,7 @@ def profit_per_trade(round_trips, ax=None) -> Figure:
     return _finish(ax, title, "Trade", "Net PnL", legend=False)
 
 
-def cost_breakdown(fills: pd.DataFrame, funding: Optional[pd.DataFrame] = None, ax=None) -> Figure:
+def cost_breakdown(fills: pd.DataFrame, funding: pd.DataFrame | None = None, ax=None) -> Figure:
     """
     Profit before costs stepped down to net profit by commission, slippage and
     funding. `fills` is Strategy.fetch_trades(), `funding` Strategy.fetch_funding().

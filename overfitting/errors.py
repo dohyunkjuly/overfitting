@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 class OverfittingError(Exception):
     """Base class for every error raised by overfitting."""
 
@@ -28,7 +30,7 @@ class InvalidLeverage(OverfittingError):
 
 class LiquidationError(OverfittingError):
     """Changing the leverage would liquidate the open position immediately."""
-    
+
 
 class ExchangeError(OverfittingError):
     """An exchange answered with an error, or could not be reached (overfitting.market)."""

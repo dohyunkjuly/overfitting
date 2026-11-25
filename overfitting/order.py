@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from decimal import Decimal
 from enum import Enum
@@ -23,10 +25,10 @@ class Order:
                  time: pd.Timestamp,
                  symbol: str,
                  qty: float,
-                 price:float,
+                 price: float | None,
                  type: OrderType,
-                 stop_price: float = None,
-                 label: str= None):
+                 stop_price: float | None = None,
+                 label: str | None = None):
 
         self.id = uuid.uuid4().hex[:16]
         self.created_at = time
@@ -79,5 +81,3 @@ class Order:
             )
             for k, v in self.__dict__.items()
         }
-
-        

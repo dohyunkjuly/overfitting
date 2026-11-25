@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from decimal import Decimal
+
 from overfitting.errors import InvalidLeverage
 from overfitting.order import Order
 
@@ -105,21 +108,22 @@ class Position:
         if self.qty == 0 or self.qty * order.qty > 0:
             self._add_to_position(order)
             return 0.0
-        else:            
-            closed_qty = min(abs(self.qty), abs(order.qty))
-            direction = 1 if self.qty > 0 else -1
-            # Long earns (exit - entry) and short earns (entry - exit). Same formula with sign flip.
-            pnl = direction * (order.executed_price - self.price) * float(closed_qty)
 
-            self.qty += order.qty
+        # Reducing, closing or flipping.
+        closed_qty = min(abs(self.qty), abs(order.qty))
+        direction = 1 if self.qty > 0 else -1
+        # Long earns (exit - entry) and short earns (entry - exit). Same formula with sign flip.
+        pnl = direction * (order.executed_price - self.price) * float(closed_qty)
 
-            if self.qty == 0:
-                self._reset()
-            else:
-                # If we flipped sides, the new entry price is the executed price.
-                flipped = self.qty * order.qty > 0
-                if flipped:
-                    self.price = order.executed_price
-                self._recalc_liquidation()
+        self.qty += order.qty
 
-            return pnl
+        if self.qty == 0:
+            self._reset()
+        else:
+            # If we flipped sides, the new entry price is the executed price.
+            flipped = self.qty * order.qty > 0
+            if flipped:
+                self.price = order.executed_price
+            self._recalc_liquidation()
+
+        return pnl

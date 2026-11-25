@@ -1,13 +1,12 @@
+from __future__ import annotations
+
+import warnings
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
-from decimal import Decimal
-from typing import List, Dict, Optional, Tuple
+
 from overfitting.data import Data
-from overfitting.order import Order, OrderType, Status
-from overfitting.position import Position
-from overfitting.slippage import Bar, resolve as resolve_slippage
-from overfitting.recorder import NullRecorder, Recorder
-import warnings
 from overfitting.errors import (
     EmptyOrderParameters,
     InsufficientMargin,
@@ -15,19 +14,24 @@ from overfitting.errors import (
     LiquidationError,
     StopOrderRejected,
 )
+from overfitting.order import Order, OrderType, Status
+from overfitting.position import Position
+from overfitting.recorder import NullRecorder, Recorder
+from overfitting.slippage import Bar, resolve as resolve_slippage
 
 # Column in the price data that holds the funding rate, if any.
 FUNDING_COLUMN = "funding_rate"
 # Relative slack on the margin check, so float rounding never rejects an all-in order.
 MARGIN_TOLERANCE = 1e-9
 
+
 class Broker:
     def __init__(self,
                  data: Data,
                  cash: float,
-                 commission_rate: float, 
-                 maint_margin_rate: float, 
-                 maint_amount:float,
+                 commission_rate: float,
+                 maint_margin_rate: float,
+                 maint_amount: float,
                  slippage=None,
                  record: bool = True,
                  funding: bool = False):
@@ -47,12 +51,12 @@ class Broker:
         #       btcusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
         #       ethusdt: {"order-id-01": <Order>, "order-id-02": <Order>},
         #   }
-        self.open_orders: Dict[str, Dict[str, Order]] = {}
-        self.position: Dict[str, Position] = {} 
+        self.open_orders: dict[str, dict[str, Order]] = {}
+        self.position: dict[str, Position] = {}
         # Symbols with an open position, in the order their positions were created.
         # Rebuilt only when a position opens or closes, so the per-bar loops skip
         # symbols that are flat.
-        self._held: List[str] = []
+        self._held: list[str] = []
         # Each symbol's funding_rate array (None without the column), looked up once.
         self._rates = {s: getattr(data[s], FUNDING_COLUMN, None) for s in data.symbols}
         self._funding_bars = None   # True where any symbol has a funding rate; built on first use
@@ -61,7 +65,7 @@ class Broker:
         self.funding_payments = []
         self.rejected_orders = []
         # Every order ever placed, whatever became of it (see Order.status).
-        self.orders: List[Order] = []
+        self.orders: list[Order] = []
         self.recorder = Recorder(data) if record else NullRecorder(data)
         self._i = 0
 
@@ -85,7 +89,7 @@ class Broker:
                 f"open_orders={len(self.open_orders)}, "
                 f"positions={list(self.position.keys())}, "
                 f"trades={len(self.trades)})")
-    
+
     def _d(self, symbol: str):
         return self.data[symbol]
 
@@ -94,7 +98,7 @@ class Broker:
         # same result as pd.to_datetime at a fraction of the cost.
         return pd.Timestamp(self.data.index[i])
 
-    def _bars(self, symbol: str, i: int) -> Tuple:
+    def _bars(self, symbol: str, i: int) -> tuple:
         d = self.data[symbol]
         return d.open[i], d.high[i], d.low[i], d.close[i]
 
@@ -103,39 +107,36 @@ class Broker:
 
     def _high(self, symbol: str, i: int):
         return self._d(symbol).high[i]
-    
+
     def _low(self, symbol: str, i: int):
         return self._d(symbol).low[i]
 
     def _close(self, symbol: str, i: int):
         return self._d(symbol).close[i]
 
-    def order(self, 
-              symbol: str, 
-              qty: float, 
-              price: float, 
-              *, 
+    def order(self,
+              symbol: str,
+              qty: float,
+              price: float | None,
+              *,
               type: str = "LIMIT",
-              stop_price: float= None,
-              label: str=None) -> Order:       
+              stop_price: float | None = None,
+              label: str | None = None) -> Order:
         """
-        :param str symbol: symbol of the market (Mandatory)
-        :param float qty: quantity of the trade (negative for short, Mandatory)
-        :param float price: price of which to be executed (Mandatory for LIMIT Orders)
-        :param str type: 'MARKET' or 'LIMIT' or 'STOP' (By default LIMIT)
-        :param float stop_price: stop price for stop orders (Mandatory for STOP orders)
+        Place an order and return it. `qty` is negative for a sell.
+
+        `type` is "LIMIT" (the default), "MARKET" or "STOP". A LIMIT order needs
+        `price`; a STOP order needs `stop_price`, and with a `price` as well it
+        is a stop-limit. Raises if the order is rejected.
         """
         if not symbol or not isinstance(symbol, str):
             raise InvalidOrderParameters(f"symbol must be a non-empty string. - {symbol}")
-        
+
         if not qty or not isinstance(qty, (int, float, Decimal)):
             raise InvalidOrderParameters(f"qty must be a non-empty number. - {qty}")
 
-        if symbol not in self.position:
-            self.position[symbol] = Position(symbol, self.maint_margin_rate, self.maint_amount)
-
-        if symbol not in self.open_orders:
-            self.open_orders[symbol] = {}
+        self.get_position(symbol)
+        self.open_orders.setdefault(symbol, {})
 
         if isinstance(type, OrderType):
             pass
@@ -143,10 +144,10 @@ class Broker:
             type = OrderType[type.upper()]
         else:
             raise InvalidOrderParameters(f"Invalid Order Type - {type}")
-        
+
         if type == OrderType.STOP and stop_price is None:
             raise EmptyOrderParameters("stop_price must be given for a STOP order.")
-        
+
         if type == OrderType.LIMIT and price is None:
             raise EmptyOrderParameters("price must be given for a LIMIT order.")
 
@@ -178,27 +179,20 @@ class Broker:
         # Put new order in the open_orders list if not rejected
         self.open_orders[symbol][order.id] = order
         return order
-    
-    def cancel_order(self, symbol, order_id: str) -> Optional[Order]:
-        if symbol not in self.open_orders:
-            return None
-        
-        if order_id not in self.open_orders[symbol]:
-            return None
 
-        order = self.open_orders[symbol][order_id]
-        del self.open_orders[symbol][order_id]
-        self._mark_cancelled(order)
-
+    def cancel_order(self, symbol: str, order_id: str) -> Order | None:
+        order = self.open_orders.get(symbol, {}).pop(order_id, None)
+        if order is not None:
+            self._mark_cancelled(order)
         return order
 
     def _mark_cancelled(self, order: Order) -> None:
         order.status = Status.CANCELLED
         order.cancelled_at = self._time(min(self._i, len(self.data) - 1))
 
-    def cancel_all_orders(self, symbol: str):
+    def cancel_all_orders(self, symbol: str) -> None:
         if symbol not in self.open_orders:
-            return None
+            return
 
         orders = self.open_orders[symbol]
         for order_id in list(orders.keys()):
@@ -208,16 +202,15 @@ class Broker:
     def get_position(self, symbol: str) -> Position:
         if symbol not in self.position:
             self.position[symbol] = Position(symbol, self.maint_margin_rate, self.maint_amount)
-            
-        return self.position[symbol]
-    
-    def close_all_positions(self, symbol: str):
-        position = self.get_position(symbol)
-        
-        if position.qty != 0: # Open position
-            self.order(symbol, -position.qty, None, type="MARKET")      
 
-    def set_leverage(self, symbol: str, leverage: int):        
+        return self.position[symbol]
+
+    def close_all_positions(self, symbol: str) -> None:
+        position = self.get_position(symbol)
+        if position.qty != 0:
+            self.order(symbol, -position.qty, None, type="MARKET")
+
+    def set_leverage(self, symbol: str, leverage: int) -> None:
         position = self.get_position(symbol)
         position.set_leverage(leverage)
         # Check if the position would be liquidated with the new leverage
@@ -264,7 +257,7 @@ class Broker:
                 f"but only {available:.2f} is available."
             )
 
-    def unrealized_pnl(self, i: Optional[int] = None) -> float:
+    def unrealized_pnl(self, i: int | None = None) -> float:
         """Unrealized PnL of all open positions, marked at the close of bar `i`."""
         if i is None:
             i = min(self._i, len(self.data) - 1)
@@ -273,7 +266,7 @@ class Broker:
         return sum([(data[s].close[i] - position[s].price) * float(position[s].qty)
                     for s in self._held])
 
-    def equity(self, i: Optional[int] = None) -> float:
+    def equity(self, i: int | None = None) -> float:
         """Cash plus unrealized PnL, marked at the close of bar `i`."""
         return self.cash + self.unrealized_pnl(i)
 
@@ -316,19 +309,20 @@ class Broker:
                 "amount": amount,
             })
 
-    def _slippage(self, symbol: str, order: Order):
+    def _slippage(self, symbol: str, order: Order) -> float:
         if self.slippage:
             return self.slippage(order, Bar(*self._bars(symbol, self._i)))
 
         return order.theoretical_price
-    
-    def _execute_trade(self, symbol: str, order: Order,  price: float = None, liquidation = False):
+
+    def _execute_trade(self, symbol: str, order: Order, price: float | None = None,
+                       liquidation: bool = False) -> None:
         order.theoretical_price = price if price else order.price
         order.executed_price = self._slippage(symbol, order)
 
         if not order.theoretical_price:
             raise EmptyOrderParameters("Cannot execute an order without a price.")
-        
+
         position = self.position[symbol]
 
         if liquidation:
@@ -354,7 +348,6 @@ class Broker:
             self._held = [s for s, p in self.position.items() if p.qty != 0]
         executed_time = self._time(self._i)
 
-        # Update Order fields as it has been filled
         order.pnl = pnl
         order.executed_at = executed_time
         order.commission = commission
@@ -365,25 +358,23 @@ class Broker:
         order.slippage = side * (order.executed_price - order.theoretical_price) * float(abs(order.qty))
         self.recorder.on_fill(self._i, order, qty_before, pnl, commission, bool(liquidation))
 
-        # Update trades and balance
         self.trades.append(order.to_dict())
-        self.cash += order.realized_pnl   
+        self.cash += order.realized_pnl
 
         if symbol in self.open_orders and order.id in self.open_orders[symbol]:
             del self.open_orders[symbol][order.id]
 
-    def next(self):
+    def next(self) -> None:
         data = self.data
         i = self._i
-        if i != 0: # Check Liquidation
+        if i != 0:  # liquidations, checked against the previous bar's range
             prev = i - 1
             for s in self._held:          # a liquidation rebuilds _held; this loop keeps the old list
                 p = self.position[s]
                 lp = p.liquid_price
-                # Check Liquidation Condition (held positions are never flat)
+                # Held positions are never flat, so qty > 0 means long.
                 if (data[s].low[prev] <= lp) if p.qty > 0 else (data[s].high[prev] >= lp):
-                    # Create MARKET Order for liquidation & Execute
-                    order = self.order(p.symbol,  -p.qty, lp, type="MARKET")
+                    order = self.order(p.symbol, -p.qty, lp, type="MARKET")
                     self._execute_trade(p.symbol, order, lp, True)
 
         # Funding is settled at the open, before this bar's orders fill.
@@ -393,7 +384,7 @@ class Broker:
             if self._funding_bars[i]:
                 self._apply_funding()
 
-        # Execute open orders (iterate snapshots to avoid mutation issues)
+        # Fill open orders. Iterate over copies: a fill removes the order from its book.
         for symbol, by_id in list(self.open_orders.items()):
             if not by_id:
                 continue
@@ -401,34 +392,29 @@ class Broker:
             open, high, low = d.open[i], d.high[i], d.low[i]
 
             for _, order in list(by_id.items()):
-                # Set market order price and update
                 if order.type == OrderType.MARKET:
-                    # Execute the trade with price being
-                    # open price because its market order
-                    self._execute_trade(symbol, order, open)
+                    self._execute_trade(symbol, order, open)  # market orders fill at the open
                 elif order.type == OrderType.LIMIT:
-                    if ((order.qty > 0 and low < order.price) or 
+                    if ((order.qty > 0 and low < order.price) or
                         (order.qty < 0 and high > order.price)):
-                        # If the order just has been created
+                        # Placed on this bar and the open is already better than the
+                        # limit: it fills at the open. A buy limit at 110 with the
+                        # open at 100 fills at 100.
                         if order.created_at == self._time(self._i):
-                            # For example)
-                            # If open price is 100 and places an limit buy order 110
-                            # The order should be executed at 100 not 110
                             if ((order.qty > 0 and order.price > open) or
                                 (order.qty < 0 and order.price < open)):
                                 self._execute_trade(symbol, order, open)
                                 continue
-                        
+
                         self._execute_trade(symbol, order)
                 else:
                     # STOP LIMIT, STOP MARKET Trigger Condition:
                     # LONG: Current Price >= Stop Price
                     # SHORT: Current Price <= Stop Price
-                    if order.is_triggered == False:
-                        # Check for the STOP order Trigger Condition
+                    if not order.is_triggered:
                         if ((order.qty > 0 and high >= order.stop_price) or
                             (order.qty < 0 and low <= order.stop_price)):
-                            order.is_triggered = True # Trigger the Order
+                            order.is_triggered = True
                             # The price when the stop triggers: the stop price, or the
                             # open if the bar opened already past it.
                             trigger = (max(order.stop_price, open) if order.qty > 0
@@ -446,7 +432,7 @@ class Broker:
                                 self._execute_trade(symbol, order, trigger)
                                 continue
 
-                if order.is_triggered == True:
+                if order.is_triggered:
                     if order.price is None: # STOP MARKET ORDER
                         self._execute_trade(symbol, order, order.stop_price)
                     else: # STOP LIMIT ORDER: resting limit, fills when the price trades through it

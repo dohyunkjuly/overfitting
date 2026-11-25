@@ -1,28 +1,32 @@
+from __future__ import annotations
+
 import inspect
 import os
-import pandas as pd
-import numpy as np
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
-from overfitting.data import Data
+from types import SimpleNamespace
+
+import numpy as np
+import pandas as pd
+
+from overfitting.analysis.report import Report
 from overfitting.broker import Broker
+from overfitting.data import Data
+from overfitting.indicators import Line, Lines
 from overfitting.order import Order
 from overfitting.position import Position
-from overfitting.analysis.report import Report
-from types import SimpleNamespace
-from overfitting.indicators import Line, Lines
+
 
 class Strategy(ABC):
     def __init__(self,
-                 data: Dict[str, pd.DataFrame],
+                 data: dict[str, pd.DataFrame] | Data,
                  *,
-                 benchmark: Optional[pd.DataFrame] = None,
-                 initial_capital: float =100000,
-                 commission_rate: float =0.0002,
-                 maint_margin_rate: float =0.005,
-                 maint_amount: float=0,
+                 benchmark: pd.DataFrame | None = None,
+                 initial_capital: float = 100000,
+                 commission_rate: float = 0.0002,
+                 maint_margin_rate: float = 0.005,
+                 maint_amount: float = 0,
                  slippage=None,
-                 params: Optional[dict] = None,
+                 params: dict | None = None,
                  record: bool = True,
                  funding: bool = False):
         """
@@ -49,8 +53,8 @@ class Strategy(ABC):
         self.benchmark = benchmark
         self.data = data if isinstance(data, Data) else Data(data)
         self.broker = Broker(
-            data=self.data, 
-            cash=initial_capital, 
+            data=self.data,
+            cash=initial_capital,
             commission_rate=commission_rate,
             maint_margin_rate=maint_margin_rate,
             maint_amount=maint_amount,
@@ -61,7 +65,7 @@ class Strategy(ABC):
         self.balances = []           # the curve returns are computed from
         self.equity_curve = []       # cash + unrealized PnL at each bar's close
         self.realized_balances = []  # cash only; moves when trades close
-        self.returns= []
+        self.returns = []
         # Position in the data. Bars before `i` have completed; bar `i` is the
         # one orders placed now will trade on.
         self._cursor = SimpleNamespace(i=0)
@@ -78,10 +82,8 @@ class Strategy(ABC):
 
     @abstractmethod
     def init(self):
-        """
-        Intended for initializing any parameters specific to the trading strategy. 
-        """
-    
+        """Set up the strategy before the first bar: indicators, leverage and any state."""
+
     @abstractmethod
     def next(self):
         """
@@ -151,10 +153,10 @@ class Strategy(ABC):
             return tuple(Line(check(values), self._cursor) for values in result)
         return Line(check(np.asarray(result, dtype=float)), self._cursor, name)
 
-    def limit_order(self, symbol: str, qty: float, price: float, label: Optional[str] = None) -> Order:
+    def limit_order(self, symbol: str, qty: float, price: float, label: str | None = None) -> Order:
         return self.broker.order(symbol, qty, price, type="LIMIT", label=label)
 
-    def market_order(self, symbol: str, qty: float, label: Optional[str] = None) -> Order:
+    def market_order(self, symbol: str, qty: float, label: str | None = None) -> Order:
         return self.broker.order(symbol, qty, None, type="MARKET", label=label)
 
     def stop_limit_order(
@@ -163,7 +165,7 @@ class Strategy(ABC):
         qty: float,
         price: float,
         stop_price: float,
-        label: Optional[str] = None,
+        label: str | None = None,
     ) -> Order:
         return self.broker.order(symbol, qty, price, type="STOP", stop_price=stop_price, label=label)
 
@@ -172,125 +174,96 @@ class Strategy(ABC):
         symbol: str,
         qty: float,
         stop_price: float,
-        label: Optional[str] = None,
+        label: str | None = None,
     ) -> Order:
         return self.broker.order(symbol, qty, None, type="STOP", stop_price=stop_price, label=label)
 
-    def cancel_order(self, symbol, order_id: str) -> Optional[Order]:
+    def cancel_order(self, symbol: str, order_id: str) -> Order | None:
+        """Cancel one open order. Returns it, or None if it is no longer open."""
         return self.broker.cancel_order(symbol, order_id)
-    
-    def cancel_all_orders(self, symbol):
-        """
-        Cancel all open orders for a specific symbol
-        """
+
+    def cancel_all_orders(self, symbol: str) -> None:
+        """Cancel every open order for `symbol`."""
         self.broker.cancel_all_orders(symbol)
-    
-    def close_all_positions(self, symbol):
-        """
-        Close all open positions through market order for a specific symbol
-        """
+
+    def close_all_positions(self, symbol: str) -> None:
+        """Close the position in `symbol` with a market order."""
         self.broker.close_all_positions(symbol)
 
-    def set_leverage(self, symbol: str, leverage: int):
+    def set_leverage(self, symbol: str, leverage: int) -> None:
         """
-        Sets the leverage for a specific symbol.
-        Raises an exception if the updated liquidation price would result 
-        in the position being liquidated after changing the leverage.
+        Set the leverage for `symbol`, from 1 to 100. Raises LiquidationError
+        if the open position would be liquidated at the new leverage.
         """
         self.broker.set_leverage(symbol, leverage)
 
     def get_position(self, symbol: str) -> Position:
-        """
-        Fetch the current position of a specific symbol
-        """
+        """The current position in `symbol`."""
         return self.broker.get_position(symbol)
 
     def get_balance(self) -> float:
-        """
-        Fetch the current balance (realized cash, excluding open positions)
-        """
+        """Cash, without the unrealized PnL of open positions."""
         return self.broker.cash
 
     def get_equity(self) -> float:
-        """
-        Fetch the current balance plus unrealized PnL of open positions
-        """
+        """Cash plus the unrealized PnL of open positions."""
         return self.broker.equity()
 
     def get_available_margin(self) -> float:
-        """
-        Fetch the cash that is not locked as margin in open positions
-        """
+        """Cash that is not locked as margin in open positions."""
         return self.broker.available_margin()
 
-    def get_open_orders(self, symbol: str) -> Dict[str, Order]:
-        """
-        Fetch the current open orders
-        """
+    def get_open_orders(self, symbol: str) -> dict[str, Order]:
+        """The open orders for `symbol`, as {order id: order}."""
         return dict(self.broker.open_orders.get(symbol, {}))
 
-    def open(self, symbol: str, i: Optional[int] = None):
+    def open(self, symbol: str, i: int | None = None):
         return self._ohlcv(symbol, "open", i)
 
-    def high(self, symbol: str, i: Optional[int] = None):
+    def high(self, symbol: str, i: int | None = None):
         return self._ohlcv(symbol, "high", i)
 
-    def low(self, symbol: str, i: Optional[int] = None):
+    def low(self, symbol: str, i: int | None = None):
         return self._ohlcv(symbol, "low", i)
 
-    def close(self, symbol: str, i: Optional[int] = None):
+    def close(self, symbol: str, i: int | None = None):
         return self._ohlcv(symbol, "close", i)
 
-    def _ohlcv(self, symbol: str, name: str, i: Optional[int]):
+    def _ohlcv(self, symbol: str, name: str, i: int | None):
         """Scalar at bar ``i`` when ``i`` is given; otherwise the full pandas Series."""
         arr = getattr(self.broker._d(symbol), name)
         if i is None:
             return pd.Series(arr, name=name)
         return arr[i]
 
-
     def bars(self, symbol: str, i: int) -> tuple:
-        """
-        Returns Tuple - open, high, low, close
-        """
+        """The open, high, low and close of `symbol` at bar `i`."""
         return self.broker._bars(symbol, i)
 
     def val(self, symbol: str, i: int, col: str):
-        """
-        Fetch the target column from target index
-        """
-        d: pd.DataFrame = self.broker._d(symbol)
-        target_column = getattr(d, col, None)
-        if target_column is None:
+        """The value of column `col` (such as "volume") for `symbol` at bar `i`."""
+        column = getattr(self.broker._d(symbol), col, None)
+        if column is None:
             raise AttributeError(f"Col '{col}' not found for {symbol}.")
-        
-        return target_column[i]
+        return column[i]
 
     def run(self, mark_to_market: bool = True) -> pd.Series:
         """
-        Executes the strategy over the dataset.
+        Run the strategy over every bar and return its returns, one per bar,
+        indexed by time. Each bar calls next(), then fills orders.
 
-        It handles the iteration over each time period in the data. It calls the 
-        user-defined `next` method on each iteration to apply the strategy's logic. 
-        Additionally, it updates account balances, and calculates the returns.
-
-        Parameters
-        ----------
-        mark_to_market : bool
-            True (default): returns are based on equity, which is cash plus the
-            unrealized PnL of open positions at each bar's close.
-            False: returns are based on cash only, which moves when trades close.
-
-        Returns:
-            A pandas Series containing the returns, indexed by the corresponding timestamps.
+        mark_to_market: True (the default) bases returns on equity, which is
+            cash plus the unrealized PnL of open positions at each bar's close.
+            False bases them on cash only, which moves when trades close.
         """
-        t = pd.to_datetime(self.data.index)
-        equity = np.zeros(len(t))
-        realized = np.zeros(len(t))
-        r = np.zeros(len(t))
-        b = equity if mark_to_market else realized
+        index = pd.to_datetime(self.data.index)
+        n = len(index)
+        equity = np.zeros(n)
+        realized = np.zeros(n)
+        returns = np.zeros(n)
+        balance = equity if mark_to_market else realized
 
-        for i in range(len(t)):
+        for i in range(n):
             self._cursor.i = i
             if self._next_takes_index:
                 self.next(i)
@@ -298,42 +271,31 @@ class Strategy(ABC):
                 self.next()
             self.broker.next()
 
-            # Update Balance
             realized[i] = self.broker.cash
             equity[i] = self.broker.equity(i)
-
             if i > 0:
-                # Updates the Returns
-                pb = b[i-1] # previous balance
-                r[i] = (b[i] - pb) / pb
+                previous = balance[i - 1]
+                returns[i] = (balance[i] - previous) / previous
 
-        self.balances = b.tolist()
+        self.balances = balance.tolist()
         self.equity_curve = equity.tolist()
         self.realized_balances = realized.tolist()
-        self.returns = r.tolist()
+        self.returns = returns.tolist()
 
-        return pd.Series(r, index=t)
+        return pd.Series(returns, index=index)
 
-    def plot(self, returns: pd.Series, save_path=None, title="Simulation"):
+    def plot(self, returns: pd.Series, save_path: str | None = None, title: str = "Simulation") -> None:
         """
-        Generates a full performance analysis of the strategy, including trade statistics,
-        performance metrics, and visualizations. Outputs are optionally saved to disk.
+        Print the performance report and show its charts.
 
-        Parameters
-        ----------
-        returns : pd.Series
-            A series of periodic strategy returns indexed by datetime.
-        save_path : str, optional
-            Directory where each chart shown is also saved as a PNG file.
-            If None, the charts are only shown.
-        title : str
-            The strategy's name on the charts and the report.
+        returns: the Series that run() returned.
+        save_path: a directory where each chart is also saved as a PNG file.
+            None (the default) only shows them.
+        title: the strategy's name on the charts and the report.
         """
-        trades_list = self.broker.trades
-
-        p = Report(
+        report = Report(
             returns_series=returns,
-            trades_list=trades_list,
+            trades_list=self.broker.trades,
             initial_capital=self.broker.initial_capital,
             benchmark=self.benchmark,
             save_path=save_path,
@@ -344,17 +306,12 @@ class Strategy(ABC):
             account_history=self.fetch_account_history(),
             position_history={s: self.fetch_position_history(s) for s in self.data.symbols},
         )
-        p.show()
+        report.show()
 
     def fetch_trades(self) -> pd.DataFrame:
-        """
-        Returns the trade history as a pandas DataFrame.
-
-        Returns:
-            A pandas DataFrame where each row represents a trade.
-        """
+        """Returns every fill, one row each."""
         return pd.DataFrame(self.broker.trades)
-    
+
     def fetch_round_trips(self) -> pd.DataFrame:
         """
         Returns completed trades, one row each: from opening a position until
@@ -405,20 +362,6 @@ class Strategy(ABC):
         """
         return pd.DataFrame(self.broker.rejected_orders)
 
-    def save_trades_to_csv(self, path='', filename="trade_history"):
-        """
-        Save the trade history to a CSV file.
-
-        Parameters
-        ----------
-        path : str
-            The directory path where the CSV file will be saved.
-        filename : str
-            The name of the CSV file to save the trade history to.
-        """
-        full_path = os.path.join(path, filename + '.csv')
-        trade_history_df = self.fetch_trades()
-        
-        trade_history_df.to_csv(full_path, index=False)
-
-
+    def save_trades_to_csv(self, path: str = "", filename: str = "trade_history") -> None:
+        """Save fetch_trades() to `<path>/<filename>.csv`."""
+        self.fetch_trades().to_csv(os.path.join(path, filename + ".csv"), index=False)

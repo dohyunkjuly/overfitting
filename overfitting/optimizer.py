@@ -39,7 +39,7 @@ import os
 import random
 import warnings
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -215,7 +215,7 @@ class OptimizeResult:
 
 # ------------------------------------------------------------------ optimize ---
 
-def _combinations(params: dict, constraint, method: str, n: Optional[int], seed) -> list[dict]:
+def _combinations(params: dict, constraint, method: str, n: int | None, seed) -> list[dict]:
     if not params:
         raise ValueError("Give at least one parameter to optimize, for example params={'fast': range(5, 50)}.")
     values = {}
@@ -272,10 +272,10 @@ def _train_window(index: pd.DatetimeIndex, train) -> tuple[int, int]:
     return int(first), int(stop)
 
 
-def optimize(strategy, data: dict, params: dict, *, maximize: Union[str, Callable] = "sharpe_ratio",
-             constraint: Optional[Callable] = None, method: str = "grid", n: Optional[int] = None,
-             seed: Optional[int] = None, train: Union[float, tuple] = 1.0,
-             workers: Optional[int] = None, **strategy_kwargs) -> OptimizeResult:
+def optimize(strategy, data: dict, params: dict, *, maximize: str | Callable = "sharpe_ratio",
+             constraint: Callable | None = None, method: str = "grid", n: int | None = None,
+             seed: int | None = None, train: float | tuple = 1.0,
+             workers: int | None = None, **strategy_kwargs) -> OptimizeResult:
     """
     Find the parameter values that maximize a metric.
 

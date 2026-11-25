@@ -1,10 +1,15 @@
-import pandas as pd
-import numpy as np
+from __future__ import annotations
+
 from types import SimpleNamespace
-from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_float_dtype
+
+import numpy as np
+import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype, is_float_dtype, is_integer_dtype
+
 from overfitting.errors import InitializationError
 
 REQUIRED_OHLC = ("open", "high", "low", "close")
+
 
 class Data(dict):
     """

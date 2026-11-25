@@ -18,7 +18,7 @@ Pass one to a strategy as `slippage=`:
 from __future__ import annotations
 
 import numbers
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, NamedTuple
 
 __all__ = ["Bar", "fixed_percent", "skewed", "resolve"]
 
@@ -60,7 +60,7 @@ def skewed(fraction: float = 0.15) -> SlippageFunction:
     return model
 
 
-def resolve(slippage) -> Optional[SlippageFunction]:
+def resolve(slippage) -> SlippageFunction | None:
     """Turn whatever the user passed as `slippage=` into a model function, or None."""
     if slippage is None:
         return None

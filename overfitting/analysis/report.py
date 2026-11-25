@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import os
-from typing import Optional, Sequence
+from typing import Sequence
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -171,14 +173,14 @@ class Report:
                  returns_series: pd.Series,
                  trades_list: Sequence[Order],
                  initial_capital: int,
-                 benchmark: Optional[pd.DataFrame] = None,
-                 save_path: Optional[str] = None,
+                 benchmark: pd.DataFrame | None = None,
+                 save_path: str | None = None,
                  title_prefix: str = "Simulation",
-                 round_trips: Optional[pd.DataFrame] = None,
-                 orders: Optional[pd.DataFrame] = None,
-                 funding: Optional[pd.DataFrame] = None,
-                 account_history: Optional[pd.DataFrame] = None,
-                 position_history: Optional[dict] = None):
+                 round_trips: pd.DataFrame | None = None,
+                 orders: pd.DataFrame | None = None,
+                 funding: pd.DataFrame | None = None,
+                 account_history: pd.DataFrame | None = None,
+                 position_history: dict | None = None):
         """
         returns_series: periodic strategy returns indexed by time.
         trades_list: the broker's trade log.
@@ -191,7 +193,7 @@ class Report:
             fetch_position_history() per symbol. Each one given adds its
             section to the report (trades, trade quality, costs, exposure, orders).
         """
-        
+
         if not isinstance(returns_series.index, pd.DatetimeIndex):
             raise ValueError("returns_series must have a DatetimeIndex")
 
@@ -257,7 +259,7 @@ class Report:
         if self.save_path:
             print(f"\nCharts saved to {self.save_path}")
 
-    def _normalize_benchmark(self, benchmark: Optional[pd.DataFrame]):
+    def _normalize_benchmark(self, benchmark: pd.DataFrame | None):
         if benchmark is None:
             return None, None
 
