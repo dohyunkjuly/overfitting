@@ -220,11 +220,3 @@ def test_unrealized_pnl_and_equity_follow_the_close():
     assert broker.unrealized_pnl(1) == pytest.approx(60)
     assert broker.equity(1) == pytest.approx(10_060)
     assert broker.cash == 10_000
-
-
-def test_initial_capital_and_its_old_misspelling():
-    broker = make_broker([(100, 101, 99, 100)], cash=5_000)
-
-    assert broker.initial_capital == 5_000
-    with pytest.warns(DeprecationWarning):
-        assert broker.initial_captial == 5_000

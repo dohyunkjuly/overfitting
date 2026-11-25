@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from decimal import Decimal
 
 import numpy as np
@@ -68,16 +67,6 @@ class Broker:
         self.orders: list[Order] = []
         self.recorder = Recorder(data) if record else NullRecorder(data)
         self._i = 0
-
-    @property
-    def initial_captial(self):
-        """Deprecated misspelling of `initial_capital`."""
-        warnings.warn(
-            "Broker.initial_captial is deprecated, use Broker.initial_capital",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.initial_capital
 
     def __repr__(self):
         return (f"Broker("
