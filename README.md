@@ -508,8 +508,6 @@ strategy.fetch_position_history("BTC")  # one symbol's position on every bar
 strategy.fetch_funding()                # funding payments
 ```
 
-The examples below are from the [Quick Start](#quick-start). Wide tables show their main columns; every column is listed under each one.
-
 ### Round trips
 
 A round trip runs from opening a position until it is flat again or flips sides.
