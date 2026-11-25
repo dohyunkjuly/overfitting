@@ -1,4 +1,5 @@
 from decimal import Decimal
+from overfitting.errors import InvalidLeverage
 from overfitting.order import Order
 
 ZERO = Decimal("0")
@@ -75,7 +76,7 @@ class Position:
 
     def set_leverage(self, leverage: int) -> None:
         if leverage <= 0 or leverage > 100:
-            raise Exception("Leverage must be between 1 and 100.")
+            raise InvalidLeverage(f"Leverage must be between 1 and 100, got {leverage}.")
         self.leverage = leverage
         self._recalc_liquidation()
 

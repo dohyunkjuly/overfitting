@@ -2,7 +2,7 @@ import inspect
 import os
 import pandas as pd
 import numpy as np
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from overfitting.data import Data
 from overfitting.broker import Broker
@@ -12,7 +12,7 @@ from overfitting.analysis.report import Report
 from types import SimpleNamespace
 from overfitting.indicators import Line, Lines
 
-class Strategy:
+class Strategy(ABC):
     def __init__(self,
                  data: Dict[str, pd.DataFrame],
                  *,
@@ -330,12 +330,11 @@ class Strategy:
             The strategy's name on the charts and the report.
         """
         trades_list = self.broker.trades
-        captial = self.broker.initial_capital
 
         p = Report(
             returns_series=returns,
             trades_list=trades_list,
-            initial_capital=captial,
+            initial_capital=self.broker.initial_capital,
             benchmark=self.benchmark,
             save_path=save_path,
             title_prefix=title,

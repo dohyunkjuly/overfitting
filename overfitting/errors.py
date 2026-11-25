@@ -22,6 +22,10 @@ class InsufficientMargin(OverfittingError):
     """There is not enough free margin to open or increase a position."""
 
 
+class InvalidLeverage(OverfittingError):
+    """Leverage must be between 1 and 100."""
+
+
 class LiquidationError(OverfittingError):
     """Changing the leverage would liquidate the open position immediately."""
     

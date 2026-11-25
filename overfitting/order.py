@@ -53,9 +53,9 @@ class Order:
         self.label = label
 
     def __repr__(self):
-        return (f"Order(id={self.id}"
+        return (f"Order(id={self.id}, "
                 f"created_at={self.created_at}, "
-                f"exeucted_at={self.executed_at}, "
+                f"executed_at={self.executed_at}, "
                 f"symbol={self.symbol}, "
                 f"side={self.side}, "
                 f"qty={self.qty}, "

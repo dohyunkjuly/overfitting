@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **A strategy must define `init()` and `next()`.** Creating one without them now raises a `TypeError` that names the missing method.
+- Leverage outside 1 to 100 raises `InvalidLeverage`, part of the library's own errors, instead of a plain `Exception`.
+
 ## 0.7.0 (2026-11-20)
 
 ### Changed
